@@ -1,0 +1,21 @@
+[package]
+name = "tssrlabs-tui"
+description = "Présentation Ratatui de TSSR Labs : écrans, navigation et boucle d'événements."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+crossterm.workspace = true
+futures-util.workspace = true
+ratatui.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+tracing.workspace = true
+
+[lints]
+workspace = true

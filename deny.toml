@@ -1,0 +1,44 @@
+# Politique de dépendances vérifiée en CI par cargo-deny.
+# https://embarkstudios.github.io/cargo-deny/
+
+[graph]
+all-features = true
+
+[advisories]
+# Toute vulnérabilité connue fait échouer la CI ; les crates non maintenues
+# sont signalées pour décision explicite.
+unmaintained = "workspace"
+yanked = "deny"
+ignore = []
+
+[licenses]
+# Licences compatibles avec la distribution du binaire sous licence MIT.
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Unicode-3.0",
+    "Zlib",
+]
+confidence-threshold = 0.9
+# Licences de la liste pas encore rencontrées : acceptées sans avertissement.
+unused-allowed-license = "allow"
+# Exceptions ciblées (copyleft par fichier, crate utilisée sans modification).
+exceptions = [
+    # Dépendance de `directories` (via `dirs-sys`).
+    { allow = ["MPL-2.0"], crate = "option-ext" },
+]
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+# Les dépendances internes du workspace utilisent des chemins sans version.
+allow-wildcard-paths = true
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]

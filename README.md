@@ -16,6 +16,7 @@ Ce dépôt contient le cadrage initial, les décisions produit et techniques, un
 - [`docs/AI_INTEGRATION.md`](docs/AI_INTEGRATION.md) — fournisseurs, confidentialité et usages IA.
 - [`docs/DATA_AND_BACKUPS.md`](docs/DATA_AND_BACKUPS.md) — SQLite, profils, sauvegardes et snapshots.
 - [`docs/TESTING_AND_QUALITY.md`](docs/TESTING_AND_QUALITY.md) — stratégie de tests et critères de qualité.
+- [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md) — plan par tranches, état d'avancement et limites connues.
 - [`prompts/CLAUDE_CODE_MASTER_PROMPT.md`](prompts/CLAUDE_CODE_MASTER_PROMPT.md) — prompt de démarrage pour Claude Code.
 
 ## Principes non négociables
@@ -34,3 +35,29 @@ Ce dépôt contient le cadrage initial, les décisions produit et techniques, un
 2. Utiliser le prompt maître avec Claude Code.
 3. Demander à Claude Code de commencer par inspecter le dépôt et proposer une structure initiale, sans générer tout le produit en une seule passe.
 4. Développer par tranches verticales testées et compilables.
+
+## Développement
+
+État actuel : **tranche 0 (socle technique)**. Voir [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md).
+
+Prérequis : [rustup](https://rustup.rs). La toolchain est épinglée dans `rust-toolchain.toml` et installée automatiquement.
+
+```sh
+cargo run                      # lance l'interface (q ou Échap pour quitter)
+cargo run -- --paths           # affiche les répertoires de données, configuration et journaux
+cargo fmt --all --check
+cargo clippy --workspace --all-targets -- -D warnings
+cargo test --workspace
+cargo build --release          # binaire : target/release/tssrlabs
+```
+
+Variables d'environnement :
+
+- `TSSRLABS_HOME` : regroupe données, configuration et journaux sous un seul répertoire (installation portable, tests).
+- `TSSRLABS_LOG` : niveau des journaux locaux (`info` par défaut ; ex. `debug`).
+
+Les journaux sont uniquement locaux ; les secrets reconnaissables y sont masqués. Aucune donnée n'est envoyée sur le réseau.
+
+## Licence
+
+Code sous licence [MIT](LICENSE). Chaque scénario conserve sa propre licence et ses crédits.

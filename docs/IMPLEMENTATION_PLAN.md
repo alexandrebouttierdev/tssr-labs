@@ -12,8 +12,8 @@ SQLite).
 
 ```text
 crates/
-├── tssrlabs-domain/          # règles métier pures            (tranche 2+)
-├── tssrlabs-application/     # cas d'utilisation + ports       (tranche 2+)
+├── tssrlabs-domain/          # règles métier pures (modèle de l'hôte, puis profils…)
+├── tssrlabs-application/     # cas d'utilisation + ports       (tranche 2)
 ├── tssrlabs-infrastructure/  # adaptateurs : chemins, journaux, SQLite, conteneurs…
 ├── tssrlabs-tui/             # présentation Ratatui (architecture de type Elm)
 └── tssrlabs/                 # binaire : racine de composition, runtime Tokio
@@ -23,8 +23,13 @@ Sens des dépendances : `tssrlabs` → (`tssrlabs-tui`, `tssrlabs-infrastructure
 → `tssrlabs-application` → `tssrlabs-domain`. La présentation ne dépend pas de
 l'infrastructure : c'est le binaire qui les assemble.
 
-Les crates `domain` et `application` sont créées dès qu'elles ont un contenu
-réel (tranche 2), pour ne pas multiplier des crates vides.
+Une crate n'est créée que lorsqu'elle a un contenu réel : `domain` existe depuis
+la tranche 1 (modèle de l'hôte), `application` arrivera avec les premiers cas
+d'utilisation (profils, tranche 2).
+
+Les textes de l'interface sont dans `crates/tssrlabs-tui/i18n/<langue>/*.ftl`
+(Fluent), embarqués dans le binaire ; chaque identifiant est déclaré dans
+`crates/tssrlabs-tui/src/i18n.rs` et vérifié par les tests.
 
 ### Principes d'exécution
 
@@ -64,7 +69,7 @@ réel (tranche 2), pour ne pas multiplier des crates vides.
 | # | Tranche | Démonstration | État |
 |---|---|---|---|
 | 0 | Socle : workspace, lints, CI 3 OS, licence MIT, restauration du terminal (y compris panique), journaux locaux avec masquage | L'application démarre et quitte proprement | **Terminée** |
-| 1 | Boucle d'événements, navigation, thème sombre + contraste élevé, responsive 100×30 / compact / « terminal trop petit », aide, i18n FR (Fluent), écran Diagnostic | Navigation et responsive | À faire |
+| 1 | Boucle d'événements, navigation, thème sombre + contraste élevé, responsive 100×30 / compact / « terminal trop petit », aide, i18n FR (Fluent), écran Diagnostic | Navigation et responsive | **Terminée** |
 | 2 | SQLite (thread dédié, migration v1), profils (créer/choisir/renommer/supprimer avec confirmation), préférences | Livrable phase 0 | À faire |
 | 3 | Contenu : cours, chapitres, parcours, compétences ; Markdown + JSON ; parcours d'exemple « Linux — les bases » ; bibliothèque, filtres, recherche ; validation du contenu embarqué | Lecture hors ligne | À faire |
 | 4 | Exercices guidés : QCM, compléter, analyser une sortie, rédiger une commande (comparaison textuelle signalée) ; indices, tentatives | Faire un exercice | À faire |
@@ -127,4 +132,51 @@ Limites connues :
 - Les fichiers de journaux héritent de l'umask ; leur confidentialité repose
   sur le répertoire parent en `0700` (Unix) et sur les ACL du profil
   utilisateur (Windows).
-- Textes encore codés en dur en français : l'i18n arrive en tranche 1.
+- Textes encore codés en dur en français : l'i18n arrive en tranche 1
+  (fait : voir ci-dessous).
+
+### Tranche 1 — Interface de base (terminée)
+
+- Crate `tssrlabs-domain` : modèle de l'hôte (`HostInfo`, `ColorSupport`),
+  sans aucune dépendance.
+- Détection de l'hôte (infrastructure) : OS, architecture, émulateur,
+  `TERM`, niveau de couleurs (`NO_COLOR`, `COLORTERM`, émulateurs connus,
+  `TERM`), correction manuelle par `TSSRLABS_COLORS`.
+- Thèmes : sombre (défaut), contraste élevé, daltonisme (Okabe-Ito),
+  monochrome. Conversion automatique 24 bits → 256 → 16 couleurs ; sans
+  couleur, attributs de texte uniquement et changement de thème masqué.
+- Affichage adaptatif : complet (≥ 100×30), compact (≥ 60×16, sans cadre ni
+  éléments secondaires), message explicatif en dessous.
+- Navigation : écrans Accueil et Diagnostic (seuls écrans réels), aide
+  superposée, raccourcis visibles en pied de page.
+- Raccourcis : table `Keymap` avec détection des conflits ; liaisons sur le
+  caractère produit (AZERTY/QWERTY), lettres insensibles à la casse,
+  alternatives non alphabétiques (F1, Tab, flèches).
+- i18n : Fluent, français, identifiants vérifiés (aucun manquant, aucun
+  orphelin), sans caractères d'isolation bidirectionnelle.
+- Vérifié dans un vrai pseudo-terminal : rendu à 100×30, 70×20, 50×12,
+  redimensionnement à chaud, `NO_COLOR`, parcours des thèmes.
+
+| Touche | Action |
+|---|---|
+| Tab / Maj+Tab | Écran suivant / précédent |
+| ↑ ↓ (ou k j) | Monter / descendre dans une liste |
+| t | Thème suivant (si le terminal gère les couleurs) |
+| F1 ou ? | Aide |
+| Échap | Fermer la fenêtre superposée |
+| q ou Ctrl+C | Quitter |
+
+Limites connues :
+- Le thème et les raccourcis ne sont pas encore enregistrés : ils reviennent
+  aux valeurs par défaut au redémarrage (préférences en tranche 2).
+- Pas encore de réglage manuel de densité : le mode compact dépend
+  uniquement de la taille du terminal.
+- Souris non activée (la capture empêcherait la sélection de texte du
+  terminal) ; la navigation est entièrement au clavier.
+- Échap suivi immédiatement d'une lettre peut être lu par le terminal comme
+  Alt+lettre (ambiguïté des séquences d'échappement, propre aux terminaux).
+- La détection des couleurs est heuristique ; `TSSRLABS_COLORS` permet de la
+  corriger. Le diagnostic indique quand la valeur est imposée.
+- Lecteurs d'écran : l'interface reste textuelle et chaque état a une
+  étiquette, mais la compatibilité dépend du terminal et de l'OS ; non testée
+  avec un lecteur d'écran à ce stade.

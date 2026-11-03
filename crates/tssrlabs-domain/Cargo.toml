@@ -1,0 +1,16 @@
+[package]
+name = "tssrlabs-domain"
+description = "Domaine de TSSR Labs : entités et règles métier pures, sans dépendance d'infrastructure."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+# Règle d'architecture : aucune dépendance vers Tokio, Ratatui, SQLite,
+# Docker/Podman ou un fournisseur IA. Le domaine reste pur et testable.
+[dependencies]
+
+[lints]
+workspace = true

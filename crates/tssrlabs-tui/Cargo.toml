@@ -10,12 +10,16 @@ publish.workspace = true
 
 [dependencies]
 crossterm.workspace = true
+fluent-bundle.workspace = true
 futures-util.workspace = true
 ratatui.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
 tracing.workspace = true
+tssrlabs-domain.workspace = true
+unic-langid.workspace = true
+unicode-width.workspace = true
 
 [lints]
 workspace = true

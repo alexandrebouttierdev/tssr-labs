@@ -38,7 +38,7 @@ Ce dépôt contient le cadrage initial, les décisions produit et techniques, un
 
 ## Développement
 
-État actuel : **tranche 0 (socle technique)**. Voir [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md).
+État actuel : **tranche 1 (interface de base : navigation, thèmes, affichage adaptatif, diagnostic)**. Voir [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md).
 
 Prérequis : [rustup](https://rustup.rs). La toolchain est épinglée dans `rust-toolchain.toml` et installée automatiquement.
 
@@ -55,6 +55,10 @@ Variables d'environnement :
 
 - `TSSRLABS_HOME` : regroupe données, configuration et journaux sous un seul répertoire (installation portable, tests).
 - `TSSRLABS_LOG` : niveau des journaux locaux (`info` par défaut ; ex. `debug`).
+- `TSSRLABS_COLORS` : impose le niveau de couleurs (`none`, `16`, `256`, `truecolor`) si la détection automatique se trompe.
+- `NO_COLOR` : désactive les couleurs ([no-color.org](https://no-color.org)).
+
+Raccourcis : `Tab`/`Maj+Tab` changer d'écran, `t` thème, `F1` ou `?` aide, `q` quitter. L'affichage complet demande 100×30 ; le mode compact s'active jusqu'à 60×16.
 
 Les journaux sont uniquement locaux ; les secrets reconnaissables y sont masqués. Aucune donnée n'est envoyée sur le réseau.
 

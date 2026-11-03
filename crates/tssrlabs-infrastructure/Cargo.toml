@@ -12,6 +12,7 @@ publish.workspace = true
 directories.workspace = true
 regex.workspace = true
 thiserror.workspace = true
+tssrlabs-domain.workspace = true
 tracing.workspace = true
 tracing-appender.workspace = true
 tracing-subscriber.workspace = true

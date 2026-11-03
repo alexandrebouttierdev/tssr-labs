@@ -12,9 +12,16 @@
 //! Cette crate ne contient aucune règle métier.
 
 pub mod app;
+pub mod i18n;
+pub mod keymap;
+pub mod layout;
 pub mod run;
+mod screens;
 pub mod terminal;
+mod text;
+pub mod theme;
 pub mod ui;
+mod widgets;
 
 /// Erreurs de la couche de présentation.
 #[derive(Debug, thiserror::Error)]

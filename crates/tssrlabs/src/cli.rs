@@ -39,6 +39,8 @@ Utilisation :
 Variables d'environnement :
   TSSRLABS_HOME   regroupe toutes les données sous ce répertoire
   TSSRLABS_LOG    niveau des journaux locaux (ex. : debug, info, warn)
+  TSSRLABS_COLORS impose le niveau de couleurs : none, 16, 256, truecolor
+  NO_COLOR        désactive les couleurs (https://no-color.org)
 
 Aucune donnée n'est envoyée sur le réseau : pas de compte, pas de télémétrie.
 ";

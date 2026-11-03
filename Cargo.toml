@@ -12,12 +12,18 @@ publish = false
 
 [workspace.dependencies]
 # Crates internes
+tssrlabs-domain = { path = "crates/tssrlabs-domain" }
 tssrlabs-infrastructure = { path = "crates/tssrlabs-infrastructure" }
 tssrlabs-tui = { path = "crates/tssrlabs-tui" }
 
 # Interface terminal
 ratatui = "0.30"
 crossterm = { version = "0.29", features = ["event-stream"] }
+
+# Localisation
+fluent-bundle = "0.16"
+unic-langid = { version = "0.9", features = ["macros"] }
+unicode-width = "0.2"
 
 # Asynchronisme
 tokio = { version = "1.54", features = ["rt-multi-thread", "macros", "signal", "sync", "time"] }

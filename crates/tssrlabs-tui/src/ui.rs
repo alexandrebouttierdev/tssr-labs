@@ -1,82 +1,74 @@
-//! Rendu de l'état de l'interface.
-//!
-//! Écran provisoire de la tranche 0 : il présente honnêtement l'état du
-//! produit. Le tableau de bord réel arrive avec les tranches suivantes.
+//! Rendu de l'état de l'interface : choix du mode d'affichage, cadre commun
+//! et écran courant. Le rendu est pur : il ne modifie pas l'état.
 
 use ratatui::Frame;
-use ratatui::layout::{Alignment, Constraint, Layout, Rect};
-use ratatui::style::{Modifier, Style, Stylize};
-use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, BorderType, Paragraph, Wrap};
+use ratatui::layout::{Constraint, Layout, Margin};
+use ratatui::text::Line;
+use ratatui::widgets::{Block, BorderType, Padding};
 
-use crate::app::App;
+use crate::app::{App, Screen};
+use crate::layout::LayoutMode;
+use crate::{screens, widgets};
 
 /// Dessine l'écran courant.
 pub fn render(app: &App, frame: &mut Frame) {
+    let theme = app.theme();
     let area = frame.area();
-    let block = Block::bordered()
-        .border_type(BorderType::Rounded)
-        .border_style(Style::new().dark_gray())
-        .title(Line::from(" TSSR Labs ").bold());
-    let inner = block.inner(area);
-    frame.render_widget(block, area);
+    frame.render_widget(Block::new().style(theme.base), area);
 
-    let [body, footer] = Layout::vertical([Constraint::Min(0), Constraint::Length(1)]).areas(inner);
-    frame.render_widget(welcome(app), centered_vertically(body, 6));
-    frame.render_widget(
-        Paragraph::new(Line::from(vec![
-            Span::styled("q", Style::new().add_modifier(Modifier::BOLD)),
-            Span::raw(" / "),
-            Span::styled("Échap", Style::new().add_modifier(Modifier::BOLD)),
-            Span::raw(" : quitter"),
-        ]))
-        .alignment(Alignment::Center)
-        .dark_gray(),
-        footer,
-    );
-}
+    let mode = LayoutMode::for_size(area.width, area.height);
+    if mode == LayoutMode::TooSmall {
+        widgets::too_small::render(app, &theme, frame, area);
+        return;
+    }
 
-fn welcome(app: &App) -> Paragraph<'static> {
-    Paragraph::new(vec![
-        Line::from("TSSR Labs").bold(),
-        Line::from("Plateforme pédagogique systèmes et réseaux"),
-        Line::from(""),
-        Line::from(format!(
-            "Version {} — socle technique (tranche 0)",
-            app.version()
-        ))
-        .dark_gray(),
-        Line::from(""),
-        Line::from("Profils, cours et tableau de bord arrivent dans les prochaines tranches.")
-            .dark_gray(),
-    ])
-    .alignment(Alignment::Center)
-    .wrap(Wrap { trim: true })
-}
-
-/// Centre verticalement un bloc de `height` lignes ; si la zone est trop
-/// petite, renvoie la zone entière (le contenu est alors coupé par Ratatui,
-/// jamais dessiné hors écran).
-fn centered_vertically(area: Rect, height: u16) -> Rect {
-    let [_, middle, _] = Layout::vertical([
-        Constraint::Fill(1),
-        Constraint::Length(height),
-        Constraint::Fill(1),
+    let [header, body, footer] = Layout::vertical([
+        Constraint::Length(1),
+        Constraint::Min(0),
+        Constraint::Length(1),
     ])
     .areas(area);
-    middle
+    widgets::chrome::header(app, &theme, mode, frame, header);
+    widgets::chrome::footer(app, &theme, mode, frame, footer);
+
+    let content = if mode == LayoutMode::Full {
+        let title = app.i18n().t(app.screen().title_id());
+        let block = Block::bordered()
+            .border_type(BorderType::Rounded)
+            .border_style(theme.border)
+            .title(Line::styled(format!(" {title} "), theme.title))
+            .padding(Padding::new(2, 2, 1, 0));
+        let inner = block.inner(body);
+        frame.render_widget(block, body);
+        inner
+    } else {
+        // Compact : pas de cadre, une marge minimale.
+        body.inner(Margin::new(1, 0))
+    };
+
+    match app.screen() {
+        Screen::Home => screens::home::render(app, &theme, frame, content),
+        Screen::Diagnostic => screens::diagnostic::render(app, &theme, frame, content, area),
+    }
+
+    if app.help_open() {
+        widgets::help::render(app, &theme, frame, area);
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::app::Action;
+    use crate::app::tests::test_env;
+    use crate::keymap::Command;
     use ratatui::Terminal;
     use ratatui::backend::TestBackend;
+    use tssrlabs_domain::host::ColorSupport;
 
-    fn rendered_text(width: u16, height: u16) -> String {
-        let app = App::new("9.9.9");
+    fn rendered(app: &App, width: u16, height: u16) -> String {
         let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
-        terminal.draw(|frame| render(&app, frame)).unwrap();
+        terminal.draw(|frame| render(app, frame)).unwrap();
         let buffer = terminal.backend().buffer();
         let mut text = String::new();
         for y in 0..buffer.area.height {
@@ -88,18 +80,94 @@ mod tests {
         text
     }
 
-    #[test]
-    fn reference_size_shows_title_version_and_quit_hint() {
-        let text = rendered_text(100, 30);
-        assert!(text.contains("TSSR Labs"), "{text}");
-        assert!(text.contains("Version 9.9.9"), "{text}");
-        assert!(text.contains("quitter"), "{text}");
+    fn app() -> App {
+        App::new(test_env(ColorSupport::TrueColor))
     }
 
     #[test]
-    fn tiny_terminal_does_not_panic() {
-        for (w, h) in [(1, 1), (10, 3), (40, 8)] {
-            let _ = rendered_text(w, h);
+    fn full_layout_shows_tabs_theme_and_shortcuts() {
+        let text = rendered(&app(), 100, 30);
+        for expected in [
+            "TSSR Labs",
+            "Accueil",
+            "Diagnostic",
+            "Thème : Sombre",
+            "Quitter",
+            "Version 9.9.9",
+        ] {
+            assert!(text.contains(expected), "« {expected} » absent :\n{text}");
+        }
+    }
+
+    #[test]
+    fn compact_layout_keeps_essential_actions() {
+        let text = rendered(&app(), 70, 20);
+        for expected in ["compact", "Aide", "Quitter", "Accueil"] {
+            assert!(text.contains(expected), "« {expected} » absent :\n{text}");
+        }
+        assert!(!text.contains("Thème : "), "{text}");
+    }
+
+    #[test]
+    fn too_small_terminal_explains_instead_of_truncating() {
+        let text = rendered(&app(), 50, 12);
+        assert!(text.contains("Terminal trop petit"), "{text}");
+        assert!(text.contains("50×12"), "{text}");
+        assert!(text.contains("60×16"), "{text}");
+    }
+
+    #[test]
+    fn diagnostic_screen_lists_host_information() {
+        let mut app = app();
+        app.update(Action::Command(Command::NextScreen));
+        let text = rendered(&app, 100, 30);
+        for expected in ["Système", "linux (x86_64)", "24 bits", "100×30", "Journaux"] {
+            assert!(text.contains(expected), "« {expected} » absent :\n{text}");
+        }
+    }
+
+    #[test]
+    fn help_overlay_lists_shortcuts() {
+        let mut app = app();
+        app.update(Action::Command(Command::ToggleHelp));
+        let text = rendered(&app, 100, 30);
+        for expected in ["Raccourcis clavier", "Ctrl+C", "Échap", "AZERTY"] {
+            assert!(text.contains(expected), "« {expected} » absent :\n{text}");
+        }
+    }
+
+    #[test]
+    fn theme_shortcut_is_hidden_without_colors() {
+        let app = App::new(test_env(ColorSupport::None));
+        let text = rendered(&app, 100, 30);
+        assert!(
+            !text.contains("t Thème"),
+            "raccourci de thème affiché :\n{text}"
+        );
+        assert!(text.contains("Thème : Monochrome"), "{text}");
+    }
+
+    #[test]
+    fn every_screen_and_size_renders_without_panic() {
+        let mut app = app();
+        for _ in 0..2 {
+            for help in [false, true] {
+                if help != app.help_open() {
+                    app.update(Action::Command(Command::ToggleHelp));
+                }
+                for (w, h) in [
+                    (1, 1),
+                    (10, 3),
+                    (59, 15),
+                    (60, 16),
+                    (80, 24),
+                    (100, 30),
+                    (250, 80),
+                ] {
+                    let _ = rendered(&app, w, h);
+                }
+            }
+            app.update(Action::Command(Command::NextScreen));
         }
     }
 }

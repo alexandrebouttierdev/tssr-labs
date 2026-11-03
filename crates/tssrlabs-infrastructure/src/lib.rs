@@ -4,6 +4,7 @@
 //! journaux locaux et, dans les tranches suivantes, SQLite, moteurs de
 //! conteneurs, coffre de secrets, etc. Elle ne contient aucune règle métier.
 
+pub mod host;
 pub mod logging;
 pub mod paths;
 pub mod redact;

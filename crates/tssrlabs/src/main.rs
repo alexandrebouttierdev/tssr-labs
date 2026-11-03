@@ -11,10 +11,11 @@ use std::process::ExitCode;
 
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
+use tssrlabs_infrastructure::host;
 use tssrlabs_infrastructure::logging::{self, LoggingError};
 use tssrlabs_infrastructure::paths::{AppPaths, PathsError};
 use tssrlabs_tui::TuiError;
-use tssrlabs_tui::app::App;
+use tssrlabs_tui::app::{App, Environment};
 use tssrlabs_tui::terminal::TerminalSession;
 
 use crate::cli::Command;
@@ -88,20 +89,32 @@ fn run() -> Result<(), AppError> {
     let paths = AppPaths::discover()?;
     paths.ensure_dirs()?;
     let _log_guard = logging::init(paths.log_dir())?;
+    let host = host::detect();
     tracing::info!(
         version = VERSION,
-        os = std::env::consts::OS,
-        arch = std::env::consts::ARCH,
+        os = %host.os,
+        arch = %host.arch,
+        term = ?host.terminal.term,
+        terminal = ?host.terminal.program,
+        colors = ?host.terminal.color,
+        colors_source = ?host.terminal.color_source,
         "démarrage de TSSR Labs"
     );
     install_panic_logging();
+    let env = Environment {
+        version: VERSION,
+        host,
+        data_dir: paths.data_dir().to_path_buf(),
+        config_dir: paths.config_dir().to_path_buf(),
+        log_dir: paths.log_dir().to_path_buf(),
+    };
 
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .thread_name("tssrlabs-worker")
         .build()
         .map_err(AppError::Runtime)?;
-    let result = runtime.block_on(run_interface());
+    let result = runtime.block_on(run_interface(env));
     // Aucune tâche ne doit survivre : `run_interface` a déjà attendu les
     // siennes ; on borne néanmoins l'arrêt du runtime.
     runtime.shutdown_timeout(std::time::Duration::from_secs(2));
@@ -114,14 +127,14 @@ fn run() -> Result<(), AppError> {
 }
 
 /// Lance l'interface et orchestre l'arrêt ordonné des tâches de fond.
-async fn run_interface() -> Result<(), AppError> {
+async fn run_interface(env: Environment) -> Result<(), AppError> {
     let shutdown = CancellationToken::new();
     let tasks = TaskTracker::new();
     tasks.spawn(cancel_on_signal(shutdown.clone()));
 
     let result = {
         let mut session = TerminalSession::enter().map_err(AppError::TerminalSetup)?;
-        let mut app = App::new(VERSION);
+        let mut app = App::new(env);
         tssrlabs_tui::run::run(session.terminal_mut(), &mut app, &shutdown).await
         // `session` est détruite ici : le terminal est restauré avant tout
         // affichage d'erreur sur la sortie standard.

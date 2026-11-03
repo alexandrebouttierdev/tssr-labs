@@ -22,13 +22,16 @@ pub fn render(app: &App, frame: &mut Frame) {
         return;
     }
 
-    let [header, body, footer] = Layout::vertical([
+    let notice_height = u16::from(app.notice().is_some());
+    let [header, body, notice, footer] = Layout::vertical([
         Constraint::Length(1),
         Constraint::Min(0),
+        Constraint::Length(notice_height),
         Constraint::Length(1),
     ])
     .areas(area);
     widgets::chrome::header(app, &theme, mode, frame, header);
+    widgets::chrome::notice(app, &theme, frame, notice);
     widgets::chrome::footer(app, &theme, mode, frame, footer);
 
     let content = if mode == LayoutMode::Full {
@@ -48,20 +51,22 @@ pub fn render(app: &App, frame: &mut Frame) {
 
     match app.screen() {
         Screen::Home => screens::home::render(app, &theme, frame, content),
+        Screen::Profiles => screens::profiles::render(app, &theme, mode, frame, content),
         Screen::Diagnostic => screens::diagnostic::render(app, &theme, frame, content, area),
     }
 
     if app.help_open() {
         widgets::help::render(app, &theme, frame, area);
+    } else {
+        widgets::dialog::render(app, &theme, frame, area);
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::Action;
-    use crate::app::tests::test_env;
-    use crate::keymap::Command;
+    use crate::app::tests::{loaded_app, test_env};
+    use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyEventState, KeyModifiers};
     use ratatui::Terminal;
     use ratatui::backend::TestBackend;
     use tssrlabs_domain::host::ColorSupport;
@@ -80,81 +85,185 @@ mod tests {
         text
     }
 
-    fn app() -> App {
-        App::new(test_env(ColorSupport::TrueColor))
+    fn send(app: &mut App, code: KeyCode) {
+        app.handle_terminal_event(&Event::Key(KeyEvent {
+            code,
+            modifiers: KeyModifiers::NONE,
+            kind: KeyEventKind::Press,
+            state: KeyEventState::NONE,
+        }));
     }
 
-    #[test]
-    fn full_layout_shows_tabs_theme_and_shortcuts() {
-        let text = rendered(&app(), 100, 30);
-        for expected in [
-            "TSSR Labs",
-            "Accueil",
-            "Diagnostic",
-            "Thème : Sombre",
-            "Quitter",
-            "Version 9.9.9",
-        ] {
-            assert!(text.contains(expected), "« {expected} » absent :\n{text}");
+    fn assert_contains(text: &str, expected: &[&str]) {
+        for e in expected {
+            assert!(text.contains(e), "« {e} » absent :\n{text}");
         }
     }
 
     #[test]
-    fn compact_layout_keeps_essential_actions() {
-        let text = rendered(&app(), 70, 20);
-        for expected in ["compact", "Aide", "Quitter", "Accueil"] {
-            assert!(text.contains(expected), "« {expected} » absent :\n{text}");
+    fn loading_state_is_explicit() {
+        let app = App::new(test_env(ColorSupport::TrueColor));
+        assert_contains(&rendered(&app, 100, 30), &["Chargement des profils"]);
+    }
+
+    #[test]
+    fn dashboard_greets_active_profile() {
+        let app = loaded_app(&["Alice"], Some(0));
+        assert_contains(
+            &rendered(&app, 100, 30),
+            &[
+                "Accueil",
+                "Profils",
+                "Diagnostic",
+                "Bonjour, Alice",
+                "Aucune activité",
+                "Profil : Alice · Thème : Sombre",
+                "Quitter",
+            ],
+        );
+    }
+
+    #[test]
+    fn first_launch_shows_creation_dialog() {
+        let app = loaded_app(&[], None);
+        let text = rendered(&app, 100, 30);
+        assert_contains(
+            &text,
+            &[
+                "Nouveau profil",
+                "Nom du profil",
+                "Entrée : valider",
+                "aucun profil actif",
+            ],
+        );
+    }
+
+    #[test]
+    fn profiles_screen_lists_profiles_with_textual_state() {
+        let mut app = loaded_app(&["Alice", "Bob"], Some(0));
+        send(&mut app, KeyCode::Tab);
+        let text = rendered(&app, 100, 30);
+        assert_contains(
+            &text,
+            &[
+                "Nom",
+                "État",
+                "Alice",
+                "actif",
+                "Bob",
+                "jamais",
+                "Créé le",
+                "Supprimer",
+                "Profils locaux",
+            ],
+        );
+        // Compact : colonnes et raccourcis secondaires masqués.
+        let compact = rendered(&app, 70, 20);
+        assert_contains(&compact, &["Alice", "Nouveau"]);
+        assert!(!compact.contains("Créé le"), "{compact}");
+    }
+
+    #[test]
+    fn footer_always_keeps_help_and_quit() {
+        let mut app = loaded_app(&["Alice"], Some(0));
+        send(&mut app, KeyCode::Tab);
+        for width in [60, 80, 100] {
+            let text = rendered(&app, width, 30);
+            let footer = text.lines().last().unwrap_or_default();
+            assert!(
+                footer.contains("Aide") && footer.contains("Quitter"),
+                "{width} : {footer}"
+            );
         }
-        assert!(!text.contains("Thème : "), "{text}");
+    }
+
+    #[test]
+    fn delete_dialog_warns_and_mentions_backup() {
+        let mut app = loaded_app(&["Alice"], Some(0));
+        send(&mut app, KeyCode::Tab);
+        send(&mut app, KeyCode::Char('s'));
+        assert_contains(
+            &rendered(&app, 100, 30),
+            &[
+                "Supprimer « Alice »",
+                "copie de sécurité",
+                "Saisissez le nom",
+            ],
+        );
+    }
+
+    #[test]
+    fn dialog_error_is_labelled_not_only_colored() {
+        let mut app = loaded_app(&[], None);
+        send(&mut app, KeyCode::Enter);
+        assert_contains(
+            &rendered(&app, 100, 30),
+            &["Erreur : le nom ne peut pas être vide."],
+        );
     }
 
     #[test]
     fn too_small_terminal_explains_instead_of_truncating() {
-        let text = rendered(&app(), 50, 12);
-        assert!(text.contains("Terminal trop petit"), "{text}");
-        assert!(text.contains("50×12"), "{text}");
-        assert!(text.contains("60×16"), "{text}");
+        let app = loaded_app(&["Alice"], Some(0));
+        assert_contains(
+            &rendered(&app, 50, 12),
+            &["Terminal trop petit", "50×12", "60×16"],
+        );
     }
 
     #[test]
     fn diagnostic_screen_lists_host_information() {
-        let mut app = app();
-        app.update(Action::Command(Command::NextScreen));
-        let text = rendered(&app, 100, 30);
-        for expected in ["Système", "linux (x86_64)", "24 bits", "100×30", "Journaux"] {
-            assert!(text.contains(expected), "« {expected} » absent :\n{text}");
-        }
+        let mut app = loaded_app(&["Alice"], Some(0));
+        send(&mut app, KeyCode::BackTab);
+        assert_contains(
+            &rendered(&app, 100, 30),
+            &[
+                "Système",
+                "linux (x86_64)",
+                "24 bits",
+                "100×30",
+                "Base de données",
+            ],
+        );
     }
 
     #[test]
     fn help_overlay_lists_shortcuts() {
-        let mut app = app();
-        app.update(Action::Command(Command::ToggleHelp));
-        let text = rendered(&app, 100, 30);
-        for expected in ["Raccourcis clavier", "Ctrl+C", "Échap", "AZERTY"] {
-            assert!(text.contains(expected), "« {expected} » absent :\n{text}");
-        }
+        let mut app = loaded_app(&["Alice"], Some(0));
+        send(&mut app, KeyCode::F(1));
+        assert_contains(
+            &rendered(&app, 100, 30),
+            &[
+                "Raccourcis clavier",
+                "Ctrl+C",
+                "Échap",
+                "s, Suppr",
+                "AZERTY",
+            ],
+        );
     }
 
     #[test]
     fn theme_shortcut_is_hidden_without_colors() {
         let app = App::new(test_env(ColorSupport::None));
         let text = rendered(&app, 100, 30);
-        assert!(
-            !text.contains("t Thème"),
-            "raccourci de thème affiché :\n{text}"
-        );
+        assert!(!text.contains("t Thème"), "{text}");
         assert!(text.contains("Thème : Monochrome"), "{text}");
     }
 
     #[test]
-    fn every_screen_and_size_renders_without_panic() {
-        let mut app = app();
-        for _ in 0..2 {
-            for help in [false, true] {
-                if help != app.help_open() {
-                    app.update(Action::Command(Command::ToggleHelp));
-                }
+    fn every_state_and_size_renders_without_panic() {
+        let mut apps = vec![
+            App::new(test_env(ColorSupport::TrueColor)),
+            loaded_app(&[], None),
+            loaded_app(&["Alice", "Bob avec un nom long"], Some(1)),
+        ];
+        let mut app = loaded_app(&["Alice"], Some(0));
+        send(&mut app, KeyCode::Tab);
+        send(&mut app, KeyCode::Char('s'));
+        apps.push(app);
+        for app in &mut apps {
+            for _ in 0..3 {
                 for (w, h) in [
                     (1, 1),
                     (10, 3),
@@ -164,10 +273,10 @@ mod tests {
                     (100, 30),
                     (250, 80),
                 ] {
-                    let _ = rendered(&app, w, h);
+                    let _ = rendered(app, w, h);
                 }
+                send(app, KeyCode::Tab);
             }
-            app.update(Action::Command(Command::NextScreen));
         }
     }
 }

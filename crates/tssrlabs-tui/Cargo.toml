@@ -12,11 +12,13 @@ publish.workspace = true
 crossterm.workspace = true
 fluent-bundle.workspace = true
 futures-util.workspace = true
+jiff = { workspace = true, features = ["tz-system", "tzdb-bundle-platform", "tzdb-zoneinfo"] }
 ratatui.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
-tokio-util.workspace = true
+tokio-util = { workspace = true, features = ["rt"] }
 tracing.workspace = true
+tssrlabs-application.workspace = true
 tssrlabs-domain.workspace = true
 unic-langid.workspace = true
 unicode-width.workspace = true

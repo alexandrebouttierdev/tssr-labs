@@ -8,12 +8,17 @@ mod cli;
 
 use std::io::IsTerminal;
 use std::process::ExitCode;
+use std::sync::Arc;
 
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
+use tssrlabs_application::Services;
+use tssrlabs_application::profiles::ProfileService;
 use tssrlabs_infrastructure::host;
 use tssrlabs_infrastructure::logging::{self, LoggingError};
 use tssrlabs_infrastructure::paths::{AppPaths, PathsError};
+use tssrlabs_infrastructure::sqlite::profiles::{SqliteProfileRepository, SqliteSafetyBackup};
+use tssrlabs_infrastructure::sqlite::{self, DbError};
 use tssrlabs_tui::TuiError;
 use tssrlabs_tui::app::{App, Environment};
 use tssrlabs_tui::terminal::TerminalSession;
@@ -34,6 +39,8 @@ enum AppError {
     Paths(#[from] PathsError),
     #[error(transparent)]
     Logging(#[from] LoggingError),
+    #[error(transparent)]
+    Database(#[from] DbError),
     #[error("impossible de démarrer le moteur asynchrone")]
     Runtime(#[source] std::io::Error),
     #[error("impossible de préparer le terminal")]
@@ -107,6 +114,17 @@ fn run() -> Result<(), AppError> {
         data_dir: paths.data_dir().to_path_buf(),
         config_dir: paths.config_dir().to_path_buf(),
         log_dir: paths.log_dir().to_path_buf(),
+        database_file: paths.database_file(),
+    };
+
+    // Ouverture synchrone avant l'interface : une base illisible ou plus
+    // récente doit être signalée clairement, sans rien modifier.
+    let (db, db_thread) = sqlite::open(&paths.database_file(), &paths.safety_backup_dir())?;
+    let services = Services {
+        profiles: ProfileService::new(
+            Arc::new(SqliteProfileRepository::new(db.clone())),
+            Arc::new(SqliteSafetyBackup::new(db)),
+        ),
     };
 
     let runtime = tokio::runtime::Builder::new_multi_thread()
@@ -114,10 +132,13 @@ fn run() -> Result<(), AppError> {
         .thread_name("tssrlabs-worker")
         .build()
         .map_err(AppError::Runtime)?;
-    let result = runtime.block_on(run_interface(env));
+    let result = runtime.block_on(run_interface(env, services));
     // Aucune tâche ne doit survivre : `run_interface` a déjà attendu les
     // siennes ; on borne néanmoins l'arrêt du runtime.
     runtime.shutdown_timeout(std::time::Duration::from_secs(2));
+    // Les services sont détruits avec `run_interface` ; on ferme ensuite la
+    // base après ses dernières écritures.
+    db_thread.close();
 
     match &result {
         Ok(()) => tracing::info!("arrêt normal"),
@@ -127,7 +148,7 @@ fn run() -> Result<(), AppError> {
 }
 
 /// Lance l'interface et orchestre l'arrêt ordonné des tâches de fond.
-async fn run_interface(env: Environment) -> Result<(), AppError> {
+async fn run_interface(env: Environment, services: Services) -> Result<(), AppError> {
     let shutdown = CancellationToken::new();
     let tasks = TaskTracker::new();
     tasks.spawn(cancel_on_signal(shutdown.clone()));
@@ -135,7 +156,7 @@ async fn run_interface(env: Environment) -> Result<(), AppError> {
     let result = {
         let mut session = TerminalSession::enter().map_err(AppError::TerminalSetup)?;
         let mut app = App::new(env);
-        tssrlabs_tui::run::run(session.terminal_mut(), &mut app, &shutdown).await
+        tssrlabs_tui::run::run(session.terminal_mut(), &mut app, services, &shutdown).await
         // `session` est détruite ici : le terminal est restauré avant tout
         // affichage d'erreur sur la sortie standard.
     };

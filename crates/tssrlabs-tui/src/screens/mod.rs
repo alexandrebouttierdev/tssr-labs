@@ -2,3 +2,4 @@
 
 pub mod diagnostic;
 pub mod home;
+pub mod profiles;

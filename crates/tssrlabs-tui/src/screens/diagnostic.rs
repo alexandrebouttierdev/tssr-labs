@@ -11,10 +11,10 @@ use crate::app::App;
 use crate::i18n::msg;
 use crate::layout::LayoutMode;
 use crate::text::ellipsize_middle;
-use crate::theme::Theme;
+use crate::theme::{Theme, theme_label_id};
 
 /// Nombre de lignes du diagnostic.
-pub const ROW_COUNT: usize = 10;
+pub const ROW_COUNT: usize = 11;
 
 const HIGHLIGHT: &str = "› ";
 
@@ -69,10 +69,11 @@ pub fn rows(app: &App, terminal_size: (u16, u16)) -> [(String, String); ROW_COUN
                 ],
             ),
         ),
-        (msg::DIAG_THEME, i18n.t(app.theme().kind.label_id())),
+        (msg::DIAG_THEME, i18n.t(theme_label_id(app.theme().kind))),
         (msg::DIAG_DATA, env.data_dir.display().to_string()),
         (msg::DIAG_CONFIG, env.config_dir.display().to_string()),
         (msg::DIAG_LOGS, env.log_dir.display().to_string()),
+        (msg::DIAG_DATABASE, env.database_file.display().to_string()),
     ]
     .map(|(label, value)| (i18n.t(label), value))
 }

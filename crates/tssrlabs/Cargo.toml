@@ -17,6 +17,7 @@ thiserror.workspace = true
 tokio.workspace = true
 tokio-util = { workspace = true, features = ["rt"] }
 tracing.workspace = true
+tssrlabs-application.workspace = true
 tssrlabs-infrastructure.workspace = true
 tssrlabs-tui.workspace = true
 

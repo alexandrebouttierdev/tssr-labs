@@ -167,3 +167,5 @@ Décisions prises lors de l'audit initial, en complément des points ci-dessus.
 - Mises à jour : vérification manuelle par défaut, vérification au lancement activable ; aucune communication réseau implicite.
 - Git : utilisation du client `git` du système (détecté comme dépendance facultative), appelé avec des arguments structurés, sans shell.
 - Rust : édition 2024, toolchain épinglée dans `rust-toolchain.toml`.
+- Migrations SQLite : exécuteur interne fondé sur `PRAGMA user_version` (une transaction par migration, copie de sécurité préalable, refus d'un schéma plus récent) plutôt que `rusqlite_migration`, dont la version disponible impose une version plus ancienne de `rusqlite`.
+- Suppression d'un profil : confirmation par saisie exacte du nom et copie de sécurité de la base créée avant la suppression ; si la copie échoue, rien n'est supprimé.

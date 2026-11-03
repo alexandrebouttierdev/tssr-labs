@@ -1,6 +1,21 @@
 //! Utilitaires de texte pour l'affichage en cellules de terminal.
 
+use jiff::Timestamp;
+use jiff::tz::TimeZone;
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
+
+/// Date et heure dans le fuseau du système (« 03/11/2026 15:42 »).
+pub fn format_local(timestamp: Timestamp) -> String {
+    format_in(timestamp, &TimeZone::system())
+}
+
+/// Date et heure dans un fuseau donné.
+pub fn format_in(timestamp: Timestamp, tz: &TimeZone) -> String {
+    timestamp
+        .to_zoned(tz.clone())
+        .strftime("%d/%m/%Y %H:%M")
+        .to_string()
+}
 
 /// Raccourcit `text` à `max_width` colonnes en remplaçant le milieu par « … ».
 ///
@@ -45,6 +60,12 @@ pub fn ellipsize_middle(text: &str, max_width: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn dates_use_french_day_month_order() {
+        let ts = Timestamp::from_second(1_762_183_320).unwrap(); // 2025-11-03 15:22 UTC
+        assert_eq!(format_in(ts, &TimeZone::UTC), "03/11/2025 15:22");
+    }
 
     #[test]
     fn short_text_is_unchanged() {

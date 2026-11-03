@@ -1,7 +1,9 @@
 //! Éléments d'interface partagés entre les écrans.
 
 pub mod chrome;
+pub mod dialog;
 pub mod help;
+pub mod input;
 pub mod too_small;
 
 use ratatui::layout::Rect;

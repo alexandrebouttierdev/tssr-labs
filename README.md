@@ -38,7 +38,7 @@ Ce dépôt contient le cadrage initial, les décisions produit et techniques, un
 
 ## Développement
 
-État actuel : **tranche 1 (interface de base : navigation, thèmes, affichage adaptatif, diagnostic)**. Voir [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md).
+État actuel : **tranche 2 (profils locaux et préférences dans SQLite)** — livrable de la phase 0 : l'application démarre, crée ou choisit un profil, affiche un tableau de bord (vide tant qu'aucune activité n'existe) et enregistre ses préférences. Voir [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md).
 
 Prérequis : [rustup](https://rustup.rs). La toolchain est épinglée dans `rust-toolchain.toml` et installée automatiquement.
 
@@ -58,9 +58,11 @@ Variables d'environnement :
 - `TSSRLABS_COLORS` : impose le niveau de couleurs (`none`, `16`, `256`, `truecolor`) si la détection automatique se trompe.
 - `NO_COLOR` : désactive les couleurs ([no-color.org](https://no-color.org)).
 
-Raccourcis : `Tab`/`Maj+Tab` changer d'écran, `t` thème, `F1` ou `?` aide, `q` quitter. L'affichage complet demande 100×30 ; le mode compact s'active jusqu'à 60×16.
+Raccourcis : `Tab`/`Maj+Tab` changer d'écran, `t` thème, `F1` ou `?` aide, `q` quitter ; sur l'écran Profils : `Entrée` activer, `n` créer, `r` renommer, `s` ou `Suppr` supprimer. L'affichage complet demande 100×30 ; le mode compact s'active jusqu'à 60×16.
 
 Les journaux sont uniquement locaux ; les secrets reconnaissables y sont masqués. Aucune donnée n'est envoyée sur le réseau.
+
+Données locales : base SQLite `tssrlabs.sqlite3` dans le répertoire de données (voir `tssrlabs --paths`). Avant une migration de schéma ou la suppression d'un profil, une copie de sécurité est créée dans `copies-de-securite/` ; pour restaurer, fermer l'application et remplacer `tssrlabs.sqlite3` par la copie voulue.
 
 ## Licence
 

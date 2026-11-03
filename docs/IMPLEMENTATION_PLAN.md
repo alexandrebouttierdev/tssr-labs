@@ -13,7 +13,7 @@ SQLite).
 ```text
 crates/
 ├── tssrlabs-domain/          # règles métier pures (modèle de l'hôte, puis profils…)
-├── tssrlabs-application/     # cas d'utilisation + ports       (tranche 2)
+├── tssrlabs-application/     # cas d'utilisation + ports (profils…)
 ├── tssrlabs-infrastructure/  # adaptateurs : chemins, journaux, SQLite, conteneurs…
 ├── tssrlabs-tui/             # présentation Ratatui (architecture de type Elm)
 └── tssrlabs/                 # binaire : racine de composition, runtime Tokio
@@ -24,8 +24,7 @@ Sens des dépendances : `tssrlabs` → (`tssrlabs-tui`, `tssrlabs-infrastructure
 l'infrastructure : c'est le binaire qui les assemble.
 
 Une crate n'est créée que lorsqu'elle a un contenu réel : `domain` existe depuis
-la tranche 1 (modèle de l'hôte), `application` arrivera avec les premiers cas
-d'utilisation (profils, tranche 2).
+la tranche 1 (modèle de l'hôte), `application` depuis la tranche 2 (profils).
 
 Les textes de l'interface sont dans `crates/tssrlabs-tui/i18n/<langue>/*.ftl`
 (Fluent), embarqués dans le binaire ; chaque identifiant est déclaré dans
@@ -37,7 +36,12 @@ Les textes de l'interface sont dans `crates/tssrlabs-tui/i18n/<langue>/*.ftl`
   est pur ; la boucle ne fait jamais d'opération longue.
 - Les tâches de fond sont lancées via un `TaskTracker` et arrêtées via un
   `CancellationToken` ; leurs résultats reviennent par canal.
-- SQLite (à partir de la tranche 2) : un thread dédié possède la connexion.
+- SQLite : un thread dédié possède l'unique connexion ; les requêtes lui
+  sont envoyées et leur résultat attendu de façon asynchrone.
+- L'état de l'interface ne fait aucune entrée/sortie : il produit des
+  « effets » exécutés dans l'ordre par un travailleur séquentiel, dont les
+  résultats reviennent comme événements. À la fermeture, les effets déjà
+  demandés sont menés à terme avant l'arrêt de la base.
 - Labos : l'exec Docker/Podman avec TTY alloue un **vrai PTY dans le
   conteneur** ; l'application émule seulement le terminal (`vt100`). Aucun PTY
   ni aucune commande d'apprenant côté hôte.
@@ -56,7 +60,7 @@ Les textes de l'interface sont dans `crates/tssrlabs-tui/i18n/<langue>/*.ftl`
 | Journaux | `tracing`, `tracing-subscriber`, `tracing-appender`, `regex` (masquage) | 0 |
 | Chemins | `directories` | 0 |
 | i18n | `fluent-bundle`, `unic-langid` | 1 |
-| SQLite | `rusqlite` (bundled), `rusqlite_migration` | 2 |
+| SQLite | `rusqlite` (bundled) + migrations internes (`user_version`) | 2 |
 | Dates | `jiff` | 2 |
 | Contenu | `serde`, `serde_json`, `pulldown-cmark`, `include_dir` | 3 |
 | Archives `.tssrlab` | `zip`, `sha2`, `semver` | 6 |
@@ -70,7 +74,7 @@ Les textes de l'interface sont dans `crates/tssrlabs-tui/i18n/<langue>/*.ftl`
 |---|---|---|---|
 | 0 | Socle : workspace, lints, CI 3 OS, licence MIT, restauration du terminal (y compris panique), journaux locaux avec masquage | L'application démarre et quitte proprement | **Terminée** |
 | 1 | Boucle d'événements, navigation, thème sombre + contraste élevé, responsive 100×30 / compact / « terminal trop petit », aide, i18n FR (Fluent), écran Diagnostic | Navigation et responsive | **Terminée** |
-| 2 | SQLite (thread dédié, migration v1), profils (créer/choisir/renommer/supprimer avec confirmation), préférences | Livrable phase 0 | À faire |
+| 2 | SQLite (thread dédié, migration v1), profils (créer/choisir/renommer/supprimer avec confirmation), préférences | Livrable phase 0 | **Terminée** |
 | 3 | Contenu : cours, chapitres, parcours, compétences ; Markdown + JSON ; parcours d'exemple « Linux — les bases » ; bibliothèque, filtres, recherche ; validation du contenu embarqué | Lecture hors ligne | À faire |
 | 4 | Exercices guidés : QCM, compléter, analyser une sortie, rédiger une commande (comparaison textuelle signalée) ; indices, tentatives | Faire un exercice | À faire |
 | 5 | XP (domaine pur), niveaux, maîtrise, historique ; dashboard réel ; favoris, « À reprendre », notes ; parcours et déblocage | Livrable phase 1 | À faire |
@@ -180,3 +184,58 @@ Limites connues :
 - Lecteurs d'écran : l'interface reste textuelle et chaque état a une
   étiquette, mais la compatibilité dépend du terminal et de l'OS ; non testée
   avec un lecteur d'écran à ce stade.
+
+### Tranche 2 — Profils et préférences (terminée) : livrable de la phase 0
+
+- Domaine : `ProfileName` (espaces normalisés, 1 à 32 caractères, aucun
+  caractère de contrôle, unicité insensible à la casse), `Preferences`.
+- Application : ports `ProfileRepository` et `SafetyBackup`, service des
+  profils (créer et activer, activer, renommer, supprimer, préférences).
+- Infrastructure SQLite :
+  - base `données/tssrlabs.sqlite3`, mode WAL, clés étrangères actives ;
+  - thread dédié propriétaire de la connexion, robuste aux paniques de tâche ;
+  - migrations internes versionnées par `PRAGMA user_version`, une
+    transaction par migration (annulée en cas d'échec) ;
+  - copie de sécurité (`VACUUM INTO`) avant toute migration d'une base
+    existante ;
+  - base créée par une version plus récente : refus explicite, aucune
+    modification.
+- Interface :
+  - premier lancement : écran Profils et fenêtre de création ;
+  - lancements suivants : profil actif et son thème restaurés, tableau de
+    bord (vide tant qu'aucune activité n'existe) ;
+  - écran Profils : liste (état « actif » écrit en toutes lettres, dates
+    locales), Entrée activer, n créer, r renommer, s ou Suppr supprimer ;
+  - suppression : saisie exacte du nom, copie de sécurité **avant**
+    suppression (si elle échoue, rien n'est supprimé), chemin de la copie
+    affiché ;
+  - le thème est enregistré par profil à chaque changement ;
+  - pendant une saisie, les lettres sont du texte (pas des raccourcis) ;
+    Ctrl+C quitte toujours ;
+  - barre de raccourcis adaptée à la largeur : Aide et Quitter toujours
+    visibles.
+- Vérifié dans un vrai pseudo-terminal sur deux lancements successifs
+  (création, persistance du profil et du thème, doublon refusé, renommage,
+  confirmation erronée refusée, suppression avec copie, réactivation).
+
+Pourquoi des migrations internes plutôt que `rusqlite_migration` : la
+version disponible impose une version plus ancienne de `rusqlite`, et le
+besoin (une liste ordonnée de scripts, `user_version`) tient en quelques
+dizaines de lignes testées, avec la copie de sécurité et le refus d'un
+schéma plus récent maîtrisés.
+
+Limites connues :
+- Les copies de sécurité (`données/copies-de-securite/`) ne sont pas encore
+  purgées automatiquement (rétention prévue avec les sauvegardes, phase 5).
+  Restauration manuelle : application fermée, remplacer
+  `tssrlabs.sqlite3` par la copie choisie.
+- L'ouverture de la base est synchrone au démarrage (avant l'interface).
+- Deux instances simultanées partagent la base sans corruption (WAL, délai
+  d'attente), mais l'une ne voit pas les changements de l'autre avant
+  relance.
+- Les fichiers de la base héritent de l'umask ; leur confidentialité repose
+  sur le répertoire parent en `0700` (Unix) et sur les droits du profil
+  utilisateur (Windows).
+- Seul le thème est enregistré pour l'instant ; la personnalisation des
+  raccourcis et la densité suivront.
+- Les journaux mentionnent les identifiants de profil, jamais leurs noms.

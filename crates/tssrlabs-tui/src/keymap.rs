@@ -32,15 +32,27 @@ pub enum Command {
     Up,
     /// Élément suivant.
     Down,
+    /// Activer l'élément sélectionné.
+    Activate,
+    /// Créer un profil.
+    NewProfile,
+    /// Renommer le profil sélectionné.
+    RenameProfile,
+    /// Supprimer le profil sélectionné.
+    DeleteProfile,
 }
 
 impl Command {
     /// Ordre d'affichage dans l'aide.
-    pub const ALL: [Self; 8] = [
+    pub const ALL: [Self; 12] = [
         Self::NextScreen,
         Self::PrevScreen,
         Self::Up,
         Self::Down,
+        Self::Activate,
+        Self::NewProfile,
+        Self::RenameProfile,
+        Self::DeleteProfile,
         Self::CycleTheme,
         Self::ToggleHelp,
         Self::Close,
@@ -58,6 +70,10 @@ impl Command {
             Self::CycleTheme => msg::CMD_CYCLE_THEME,
             Self::Up => msg::CMD_UP,
             Self::Down => msg::CMD_DOWN,
+            Self::Activate => msg::CMD_ACTIVATE,
+            Self::NewProfile => msg::CMD_NEW_PROFILE,
+            Self::RenameProfile => msg::CMD_RENAME_PROFILE,
+            Self::DeleteProfile => msg::CMD_DELETE_PROFILE,
         }
     }
 }
@@ -112,6 +128,7 @@ impl KeyBinding {
             KeyCode::Down => i18n.t(msg::KEY_DOWN),
             KeyCode::Left => i18n.t(msg::KEY_LEFT),
             KeyCode::Right => i18n.t(msg::KEY_RIGHT),
+            KeyCode::Delete => i18n.t(msg::KEY_DELETE),
             other => format!("{other:?}"),
         };
         parts.push(key);
@@ -149,7 +166,7 @@ pub struct Keymap {
 
 impl Default for Keymap {
     fn default() -> Self {
-        use KeyCode::{BackTab, Char, Down, Esc, F, Tab, Up};
+        use KeyCode::{BackTab, Char, Delete, Down, Enter, Esc, F, Tab, Up};
         let plain = KeyBinding::plain;
         Self {
             bindings: vec![
@@ -165,6 +182,11 @@ impl Default for Keymap {
                 (plain(Char('k')), Command::Up),
                 (plain(Down), Command::Down),
                 (plain(Char('j')), Command::Down),
+                (plain(Enter), Command::Activate),
+                (plain(Char('n')), Command::NewProfile),
+                (plain(Char('r')), Command::RenameProfile),
+                (plain(Char('s')), Command::DeleteProfile),
+                (plain(Delete), Command::DeleteProfile),
             ],
         }
     }

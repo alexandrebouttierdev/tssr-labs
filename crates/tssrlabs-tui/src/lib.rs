@@ -12,6 +12,7 @@
 //! Cette crate ne contient aucune règle métier.
 
 pub mod app;
+pub mod effects;
 pub mod i18n;
 pub mod keymap;
 pub mod layout;

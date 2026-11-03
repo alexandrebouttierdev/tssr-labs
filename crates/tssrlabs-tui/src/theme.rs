@@ -13,43 +13,15 @@ use tssrlabs_domain::host::ColorSupport;
 
 use crate::i18n::msg;
 
-/// Thèmes disponibles.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum ThemeKind {
-    /// Thème sombre par défaut.
-    #[default]
-    Dark,
-    /// Contraste renforcé.
-    HighContrast,
-    /// Palette adaptée aux daltonismes courants (Okabe-Ito).
-    Colorblind,
-    /// Sans couleur : attributs de texte uniquement.
-    Monochrome,
-}
+pub use tssrlabs_domain::preferences::ThemeChoice;
 
-impl ThemeKind {
-    /// Ordre de parcours.
-    pub const ALL: [Self; 4] = [
-        Self::Dark,
-        Self::HighContrast,
-        Self::Colorblind,
-        Self::Monochrome,
-    ];
-
-    /// Thème suivant dans l'ordre de parcours.
-    pub fn next(self) -> Self {
-        let index = Self::ALL.iter().position(|k| *k == self).unwrap_or(0);
-        Self::ALL[(index + 1) % Self::ALL.len()]
-    }
-
-    /// Identifiant du nom localisé.
-    pub fn label_id(self) -> &'static str {
-        match self {
-            Self::Dark => msg::THEME_DARK,
-            Self::HighContrast => msg::THEME_HIGH_CONTRAST,
-            Self::Colorblind => msg::THEME_COLORBLIND,
-            Self::Monochrome => msg::THEME_MONOCHROME,
-        }
+/// Identifiant du nom localisé d'un thème.
+pub fn theme_label_id(choice: ThemeChoice) -> &'static str {
+    match choice {
+        ThemeChoice::Dark => msg::THEME_DARK,
+        ThemeChoice::HighContrast => msg::THEME_HIGH_CONTRAST,
+        ThemeChoice::Colorblind => msg::THEME_COLORBLIND,
+        ThemeChoice::Monochrome => msg::THEME_MONOCHROME,
     }
 }
 
@@ -57,7 +29,7 @@ impl ThemeKind {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Theme {
     /// Thème effectivement appliqué (monochrome si le terminal n'a pas de couleur).
-    pub kind: ThemeKind,
+    pub kind: ThemeChoice,
     /// Texte courant sur le fond principal.
     pub base: Style,
     /// Barres d'en-tête et de pied de page.
@@ -144,13 +116,13 @@ const COLORBLIND: Palette = Palette {
 
 impl Theme {
     /// Construit le thème demandé, adapté aux capacités du terminal.
-    pub fn resolve(kind: ThemeKind, support: ColorSupport) -> Self {
+    pub fn resolve(kind: ThemeChoice, support: ColorSupport) -> Self {
         let palette = match kind {
             _ if !support.has_colors() => return Self::monochrome(),
-            ThemeKind::Monochrome => return Self::monochrome(),
-            ThemeKind::Dark => &DARK,
-            ThemeKind::HighContrast => &HIGH_CONTRAST,
-            ThemeKind::Colorblind => &COLORBLIND,
+            ThemeChoice::Monochrome => return Self::monochrome(),
+            ThemeChoice::Dark => &DARK,
+            ThemeChoice::HighContrast => &HIGH_CONTRAST,
+            ThemeChoice::Colorblind => &COLORBLIND,
         };
         let c = |rgb: Rgb| convert(rgb, support);
         let bold = Modifier::BOLD;
@@ -178,7 +150,7 @@ impl Theme {
     fn monochrome() -> Self {
         let bold = Style::new().add_modifier(Modifier::BOLD);
         Self {
-            kind: ThemeKind::Monochrome,
+            kind: ThemeChoice::Monochrome,
             base: Style::new(),
             bar: Style::new(),
             muted: Style::new(),
@@ -267,25 +239,15 @@ mod tests {
     use super::*;
 
     #[test]
-    fn next_cycles_through_all_themes() {
-        let mut kind = ThemeKind::Dark;
-        for _ in 0..ThemeKind::ALL.len() {
-            kind = kind.next();
-        }
-        assert_eq!(kind, ThemeKind::Dark);
-        assert_eq!(ThemeKind::Monochrome.next(), ThemeKind::Dark);
-    }
-
-    #[test]
     fn no_color_support_forces_monochrome() {
-        let theme = Theme::resolve(ThemeKind::Dark, ColorSupport::None);
-        assert_eq!(theme.kind, ThemeKind::Monochrome);
+        let theme = Theme::resolve(ThemeChoice::Dark, ColorSupport::None);
+        assert_eq!(theme.kind, ThemeChoice::Monochrome);
         assert_eq!(theme.base, Style::new());
     }
 
     #[test]
     fn colors_follow_terminal_capabilities() {
-        let fg_of = |support| Theme::resolve(ThemeKind::Dark, support).base.fg;
+        let fg_of = |support| Theme::resolve(ThemeChoice::Dark, support).base.fg;
         assert!(matches!(
             fg_of(ColorSupport::TrueColor),
             Some(Color::Rgb(..))

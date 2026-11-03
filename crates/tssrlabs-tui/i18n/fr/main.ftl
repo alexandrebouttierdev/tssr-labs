@@ -9,12 +9,59 @@ app-subtitle = Plateforme pédagogique systèmes et réseaux
 ## Écrans
 
 screen-home = Accueil
+screen-profiles = Profils
 screen-diagnostic = Diagnostic
 
 ## Accueil
 
-home-version = Version { $version } — socle technique
-home-upcoming = Les profils, les cours et le tableau de bord arrivent dans les prochaines versions.
+home-version = Version { $version }
+home-upcoming = Les cours et les exercices arrivent dans la prochaine version.
+home-greeting = Bonjour, { $name }
+home-no-activity = Aucune activité enregistrée pour ce profil.
+home-no-profile = Aucun profil actif.
+home-no-profile-hint = Ouvrez l'écran Profils pour créer ou choisir un profil.
+loading-profiles = Chargement des profils…
+
+## Profils
+
+profiles-empty = Aucun profil pour l'instant.
+profiles-empty-hint = Appuyez sur { $key } pour créer votre premier profil.
+profiles-col-name = Nom
+profiles-col-created = Créé le
+profiles-col-last-used = Dernière utilisation
+profiles-col-state = État
+profiles-active = actif
+profiles-never = jamais
+profiles-local-note = Profils locaux : aucun compte, aucune donnée envoyée sur le réseau.
+
+## Fenêtres de dialogue
+
+dialog-create-title = Nouveau profil
+dialog-rename-title = Renommer « { $name } »
+dialog-name-label = Nom du profil ({ $max } caractères au plus) :
+dialog-delete-title = Supprimer « { $name } »
+dialog-delete-warning = La progression, les notes et les préférences de ce profil seront supprimées.
+dialog-delete-backup = Une copie de sécurité de la base est créée avant la suppression.
+dialog-delete-prompt = Saisissez le nom du profil pour confirmer :
+dialog-busy = Opération en cours…
+dialog-hint = { $confirm } : valider · { $cancel } : annuler
+
+## Messages
+
+notice-info = Info : { $text }
+notice-error = Erreur : { $text }
+error-name-empty = le nom ne peut pas être vide.
+error-name-too-long = le nom ne doit pas dépasser { $max } caractères.
+error-name-control = le nom contient un caractère non imprimable.
+error-name-taken = ce nom est déjà utilisé par un autre profil.
+error-not-found = ce profil n'existe plus.
+error-confirmation = la saisie ne correspond pas au nom du profil.
+error-storage = problème de stockage ({ $detail }).
+status-created = profil « { $name } » créé et activé.
+status-renamed = profil renommé en « { $name } ».
+status-selected = profil « { $name } » activé.
+status-deleted = profil supprimé. Copie de sécurité : { $path }
+status-prefs-error = préférences non enregistrées : { $detail }
 
 ## Commandes clavier
 
@@ -26,6 +73,10 @@ cmd-prev-screen = Écran précédent
 cmd-cycle-theme = Thème
 cmd-up = Monter
 cmd-down = Descendre
+cmd-activate = Activer
+cmd-new-profile = Nouveau
+cmd-rename-profile = Renommer
+cmd-delete-profile = Supprimer
 
 ## Noms des touches
 
@@ -40,6 +91,7 @@ key-left = ←
 key-right = →
 key-ctrl = Ctrl
 key-alt = Alt
+key-delete = Suppr
 
 ## Aide
 
@@ -54,7 +106,8 @@ theme-high-contrast = Contraste élevé
 theme-colorblind = Daltonisme
 theme-monochrome = Monochrome
 status-theme = Thème : { $name }
-status-compact = compact
+status-profile = Profil : { $name }
+status-no-profile = aucun profil actif
 
 ## Terminal trop petit
 
@@ -75,6 +128,7 @@ diag-theme = Thème
 diag-data = Données
 diag-config = Configuration
 diag-logs = Journaux
+diag-database = Base de données
 diag-note = Ces informations restent sur cet ordinateur.
 value-unknown = inconnu
 colors-none = aucune (texte seul)

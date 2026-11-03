@@ -89,6 +89,17 @@ impl AppPaths {
         &self.log_dir
     }
 
+    /// Fichier de la base SQLite.
+    pub fn database_file(&self) -> PathBuf {
+        self.data_dir.join("tssrlabs.sqlite3")
+    }
+
+    /// Répertoire des copies de sécurité automatiques (avant migration ou
+    /// suppression).
+    pub fn safety_backup_dir(&self) -> PathBuf {
+        self.data_dir.join("copies-de-securite")
+    }
+
     /// Crée les répertoires manquants. Sous Unix, ils sont créés avec les
     /// permissions `0700` : journaux et données ne concernent que
     /// l'utilisateur courant. Les répertoires existants ne sont pas modifiés.
@@ -103,7 +114,9 @@ impl AppPaths {
     }
 }
 
-fn create_private_dir(path: &Path) -> io::Result<()> {
+/// Crée un répertoire (et ses parents) réservé à l'utilisateur courant
+/// (`0700` sous Unix). Sans effet s'il existe déjà.
+pub fn create_private_dir(path: &Path) -> io::Result<()> {
     let mut builder = DirBuilder::new();
     builder.recursive(true);
     #[cfg(unix)]

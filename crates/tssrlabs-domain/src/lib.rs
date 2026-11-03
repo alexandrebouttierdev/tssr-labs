@@ -5,3 +5,5 @@
 //! produisent ces types ; la présentation les affiche.
 
 pub mod host;
+pub mod preferences;
+pub mod profile;

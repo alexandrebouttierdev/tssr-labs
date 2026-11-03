@@ -11,6 +11,8 @@ publish.workspace = true
 # Règle d'architecture : aucune dépendance vers Tokio, Ratatui, SQLite,
 # Docker/Podman ou un fournisseur IA. Le domaine reste pur et testable.
 [dependencies]
+jiff.workspace = true
+thiserror.workspace = true
 
 [lints]
 workspace = true

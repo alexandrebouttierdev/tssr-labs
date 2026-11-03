@@ -13,6 +13,7 @@ publish = false
 [workspace.dependencies]
 # Crates internes
 tssrlabs-domain = { path = "crates/tssrlabs-domain" }
+tssrlabs-application = { path = "crates/tssrlabs-application" }
 tssrlabs-infrastructure = { path = "crates/tssrlabs-infrastructure" }
 tssrlabs-tui = { path = "crates/tssrlabs-tui" }
 
@@ -29,6 +30,12 @@ unicode-width = "0.2"
 tokio = { version = "1.54", features = ["rt-multi-thread", "macros", "signal", "sync", "time"] }
 tokio-util = "0.7"
 futures-util = { version = "0.3", default-features = false, features = ["std"] }
+
+# Stockage
+rusqlite = { version = "0.41", features = ["bundled"] }
+
+# Dates (sans fuseau par défaut ; la présentation active le fuseau système)
+jiff = { version = "0.2", default-features = false, features = ["std"] }
 
 # Erreurs, logs, chemins
 thiserror = "2"

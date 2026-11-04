@@ -76,7 +76,7 @@ Les textes de l'interface sont dans `crates/tssrlabs-tui/i18n/<langue>/*.ftl`
 | 1 | Boucle d'événements, navigation, thème sombre + contraste élevé, responsive 100×30 / compact / « terminal trop petit », aide, i18n FR (Fluent), écran Diagnostic | Navigation et responsive | **Terminée** |
 | 2 | SQLite (thread dédié, migration v1), profils (créer/choisir/renommer/supprimer avec confirmation), préférences | Livrable phase 0 | **Terminée** |
 | 3 | Contenu : cours, chapitres, parcours, compétences ; Markdown + JSON ; parcours d'exemple « Linux — les bases » ; bibliothèque, filtres, recherche ; validation du contenu embarqué | Lecture hors ligne | **Terminée** |
-| 4 | Exercices guidés : QCM, compléter, analyser une sortie, rédiger une commande (comparaison textuelle signalée) ; indices, tentatives | Faire un exercice | À faire |
+| 4 | Exercices guidés : QCM, compléter, analyser une sortie, rédiger une commande (comparaison textuelle signalée) ; indices, tentatives | Faire un exercice | **Terminée** |
 | 5 | XP (domaine pur), niveaux, maîtrise, historique ; dashboard réel ; favoris, « À reprendre », notes ; parcours et déblocage | Livrable phase 1 | À faire |
 | 6 | Schéma de scénario v1, import/export `.tssrlab` sécurisé, rapport de validation sans exécution | Import/export + tests sécurité | À faire |
 | 7 | Détection Docker/Podman (socket, contexte, rootless, options de sécurité, cgroups), écran des capacités, job CI Docker | Diagnostic moteur | À faire |
@@ -290,3 +290,45 @@ Limites connues :
   alors coupée.
 - La recherche porte sur titre, résumé, mots-clés, objectifs et
   compétences, pas sur le corps des chapitres.
+
+### Tranche 4 — Exercices guidés (terminée)
+
+- Domaine : `Exercise` (QCM simple ou multiple, commande à compléter,
+  analyse de sortie, commande à rédiger), vérification des réponses,
+  solution, `Outcome` (réussite, échec, solution affichée) et
+  `ExerciseProgress` (tentatives, réussite, solution vue, moins d'indices
+  utilisés lors d'une réussite — base des bonus de la tranche 5).
+- Contenu : `exercises.json` par chapitre (format documenté), validation
+  complète ; 12 exercices originaux pour le parcours « Linux — les bases ».
+- Stockage : migration v2 `exercise_attempts` (profil, exercice, issue,
+  indices, date ; la réponse saisie n'est pas conservée), suppression en
+  cascade avec le profil. Vérifié en conditions réelles : une base créée
+  par la tranche 2 est migrée au lancement, avec copie de sécurité
+  préalable et données conservées.
+- Application : port `AttemptRepository`, `ExerciseService` (enregistrer,
+  progression).
+- Interface :
+  - depuis la lecture d'un chapitre, `e` ouvre ses exercices ;
+  - QCM : flèches et Espace, ou chiffres, pour cocher ; état écrit `[x]`,
+    bonnes réponses marquées `✓` une fois l'exercice terminé ;
+  - réponses textuelles : les lettres sont du texte (pas de raccourci) ;
+    mention permanente « la commande n'est pas exécutée » ;
+  - Entrée valide (puis passe à l'exercice suivant après réussite), F2
+    indice suivant, F3 solution (comptée comme tentative), PgSuiv/PgPréc
+    exercice suivant/précédent, Échap retour au chapitre ;
+  - réponse vide : message, rien n'est compté ;
+  - sans profil actif : exercices utilisables, tentatives non enregistrées
+    et signalées comme telles ;
+  - tableau de bord, lecture et parcours affichent les exercices réussis.
+- Vérifié dans un vrai pseudo-terminal sur une base migrée : QCM simple et
+  multiple (réponse partielle refusée), commande complétée, commande
+  rédigée avec invite et espaces superflus, compteurs à jour.
+
+Limites connues :
+- Vérification textuelle uniquement : l'ordre des options et les
+  écritures équivalentes non listées par l'auteur sont refusés ; la
+  vérification par exécution réelle viendra avec les laboratoires.
+- Pas encore d'XP ni de niveaux (tranche 5) ; la progression est
+  enregistrée pour être exploitée ensuite.
+- Sur un petit terminal, la fin d'un exercice long (explication, indices)
+  peut être coupée ; pas de défilement dans l'écran d'exercice.

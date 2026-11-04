@@ -9,6 +9,7 @@
 //!   jamais modifiée.
 //! - Les données volumineuses resteront hors de SQLite (fichiers gérés).
 
+pub mod attempts;
 pub mod profiles;
 
 use std::panic::AssertUnwindSafe;
@@ -25,7 +26,10 @@ use crate::paths::create_private_dir;
 
 /// Migrations, dans l'ordre. Ne jamais modifier une migration publiée :
 /// ajouter une nouvelle entrée.
-const MIGRATIONS: &[&str] = &[include_str!("../../migrations/0001_profiles.sql")];
+const MIGRATIONS: &[&str] = &[
+    include_str!("../../migrations/0001_profiles.sql"),
+    include_str!("../../migrations/0002_exercise_attempts.sql"),
+];
 
 /// Version de schéma attendue par cette version de l'application.
 pub const SCHEMA_VERSION: i64 = MIGRATIONS.len() as i64;
@@ -356,7 +360,12 @@ mod tests {
         assert_eq!(schema_version(&conn).unwrap(), SCHEMA_VERSION);
         assert_eq!(
             tables(&conn),
-            vec!["app_state", "profile_settings", "profiles"]
+            vec![
+                "app_state",
+                "exercise_attempts",
+                "profile_settings",
+                "profiles"
+            ]
         );
         assert_eq!(
             backups(&tmp.path().join("b")),
@@ -391,6 +400,30 @@ mod tests {
         assert_eq!(schema_version(&copy).unwrap(), 1);
         let x: i64 = copy.query_row("SELECT x FROM a", [], |r| r.get(0)).unwrap();
         assert_eq!(x, 42);
+    }
+
+    #[test]
+    fn real_upgrade_from_v1_keeps_data_and_backs_up() {
+        let tmp = tempfile::tempdir().unwrap();
+        let backup_dir = tmp.path().join("copies");
+        let mut conn = Connection::open(tmp.path().join("db")).unwrap();
+        conn.pragma_update(None, "foreign_keys", "ON").unwrap();
+        migrate(&mut conn, &MIGRATIONS[..1], &backup_dir).unwrap();
+        conn.execute(
+            "INSERT INTO profiles (name, name_key, created_at) VALUES ('Alice', 'alice', 0)",
+            [],
+        )
+        .unwrap();
+
+        migrate(&mut conn, MIGRATIONS, &backup_dir).unwrap();
+
+        assert_eq!(schema_version(&conn).unwrap(), SCHEMA_VERSION);
+        let name: String = conn
+            .query_row("SELECT name FROM profiles", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(name, "Alice");
+        assert!(tables(&conn).contains(&"exercise_attempts".to_owned()));
+        assert_eq!(backups(&backup_dir), 1, "copie avant migration v1 → v2");
     }
 
     #[test]

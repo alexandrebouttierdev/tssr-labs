@@ -1,0 +1,41 @@
+[
+  {
+    "id": "ex-fhs-configuration",
+    "type": "qcm",
+    "title": "Où chercher une configuration",
+    "prompt": "Dans quel répertoire se trouvent les fichiers de configuration du système et des services ?",
+    "choices": ["/etc", "/var", "/usr", "/home"],
+    "correct": [0],
+    "hints": ["Les journaux sont dans un autre répertoire, sous /var."],
+    "explanation": "`/etc` regroupe la configuration ; `/var` les données variables comme les journaux (`/var/log`)."
+  },
+  {
+    "id": "ex-chemin-relatif",
+    "type": "analyser",
+    "title": "Suivre un chemin relatif",
+    "prompt": "Quel est le répertoire courant après ces commandes ? Répondez par un chemin absolu.",
+    "output": "$ pwd\n/var/log\n$ cd ../www\n$ pwd\n?",
+    "answers": ["/var/www"],
+    "hints": ["`..` désigne le répertoire parent de /var/log."],
+    "explanation": "Depuis `/var/log`, `..` remonte à `/var`, puis `www` mène à `/var/www`."
+  },
+  {
+    "id": "ex-mkdir-parents",
+    "type": "rediger",
+    "title": "Créer une arborescence",
+    "prompt": "Créez en une seule commande le répertoire `projets/site/images`, y compris les répertoires parents manquants.",
+    "answers": ["mkdir -p projets/site/images", "mkdir --parents projets/site/images"],
+    "hints": ["La commande de création de répertoire est `mkdir`.", "Une option permet de créer aussi les parents."],
+    "explanation": "`mkdir -p` crée les répertoires parents manquants et ne signale pas d'erreur s'ils existent déjà."
+  },
+  {
+    "id": "ex-tail-suivi",
+    "type": "completer",
+    "title": "Suivre un journal",
+    "prompt": "Complétez la commande pour suivre l'arrivée de nouvelles lignes dans le journal en temps réel.",
+    "template": "tail ___ /var/log/syslog",
+    "answers": ["-f", "--follow"],
+    "hints": ["L'option vient de l'anglais « follow »."],
+    "explanation": "`tail -f` affiche les nouvelles lignes au fur et à mesure ; Ctrl+C arrête le suivi."
+  }
+]

@@ -143,7 +143,23 @@ pub fn footer(app: &App, theme: &Theme, mode: LayoutMode, frame: &mut Frame, are
             Command::ClearFilters,
         ]),
         Screen::Paths => commands.push(Command::Activate),
-        Screen::Reader => commands.extend([Command::Close, Command::Down, Command::PageDown]),
+        Screen::Reader => {
+            commands.push(Command::Close);
+            let has_exercises = app
+                .reader()
+                .is_some_and(|r| !app.catalog().exercises_for(&r.chapter).is_empty());
+            if has_exercises {
+                commands.push(Command::OpenExercises);
+            }
+            commands.extend([Command::Down, Command::PageDown]);
+        }
+        Screen::Exercise => commands.extend([
+            Command::Close,
+            Command::Activate,
+            Command::Hint,
+            Command::ShowSolution,
+            Command::NextExercise,
+        ]),
         Screen::Diagnostic if full => commands.extend([Command::Up, Command::Down]),
         _ => {}
     }
@@ -174,7 +190,8 @@ pub fn footer(app: &App, theme: &Theme, mode: LayoutMode, frame: &mut Frame, are
 pub fn command_label(app: &App, command: Command) -> String {
     let id = match (app.screen(), command) {
         (Screen::Library | Screen::Paths, Command::Activate) => msg::CMD_OPEN,
-        (Screen::Reader, Command::Close) => msg::CMD_BACK,
+        (Screen::Reader | Screen::Exercise, Command::Close) => msg::CMD_BACK,
+        (Screen::Exercise, Command::Activate) => msg::CMD_VALIDATE,
         _ => command.label_id(),
     };
     app.i18n().t(id)

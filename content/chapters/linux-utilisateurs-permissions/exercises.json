@@ -1,0 +1,46 @@
+[
+  {
+    "id": "ex-lire-permissions",
+    "type": "analyser",
+    "title": "Lire une ligne de ls -l",
+    "prompt": "D'après cette ligne, quel groupe peut lire le fichier (sans pouvoir le modifier) ?",
+    "output": "-rw-r----- 1 alice compta 2048 nov.  3 10:12 budget.ods",
+    "answers": ["compta"],
+    "hints": ["Après le nombre de liens viennent le propriétaire, puis le groupe."],
+    "explanation": "Le deuxième triplet `r--` s'applique au groupe `compta` : lecture seule."
+  },
+  {
+    "id": "ex-octal-755",
+    "type": "qcm",
+    "title": "Notation octale",
+    "prompt": "Quelle notation octale correspond aux permissions `rwxr-xr-x` ?",
+    "choices": ["644", "755", "775", "700"],
+    "correct": [1],
+    "hints": ["r = 4, w = 2, x = 1 : additionnez pour chaque triplet."],
+    "explanation": "rwx = 4+2+1 = 7, r-x = 4+1 = 5 : `755`."
+  },
+  {
+    "id": "ex-repertoire-x",
+    "type": "qcm",
+    "title": "Le droit x sur un répertoire",
+    "prompt": "Sur un répertoire, que permet le droit `x` ?",
+    "choices": [
+      "Lister son contenu",
+      "Le traverser pour accéder aux fichiers qu'il contient",
+      "Y créer et supprimer des fichiers",
+      "Exécuter tous les scripts qu'il contient"
+    ],
+    "correct": [1],
+    "hints": ["Lister relève de r, créer ou supprimer relève de w."],
+    "explanation": "Sur un répertoire, `x` permet de le traverser ; sans lui, son contenu est inaccessible même si les fichiers sont lisibles."
+  },
+  {
+    "id": "ex-chmod-prive",
+    "type": "rediger",
+    "title": "Protéger une clé privée",
+    "prompt": "En notation octale, rendez le fichier `cle-privee` lisible et modifiable par son seul propriétaire.",
+    "answers": ["chmod 600 cle-privee", "chmod 0600 cle-privee"],
+    "hints": ["Lecture et écriture pour le propriétaire : 4 + 2.", "Aucun droit pour le groupe ni pour les autres."],
+    "explanation": "`chmod 600` donne `rw-------` : c'est la protection attendue pour une clé privée SSH."
+  }
+]

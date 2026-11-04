@@ -7,7 +7,11 @@
 
 use tokio::sync::mpsc;
 use tssrlabs_application::Services;
+use tssrlabs_application::exercises::ProgressMap;
+use tssrlabs_application::ports::RepositoryError;
 use tssrlabs_application::profiles::{Deletion, ProfileError, ProfilesSnapshot};
+use tssrlabs_domain::content::ContentId;
+use tssrlabs_domain::exercise::{ExerciseProgress, Outcome};
 use tssrlabs_domain::preferences::Preferences;
 use tssrlabs_domain::profile::ProfileId;
 
@@ -44,6 +48,19 @@ pub enum Effect {
         /// Préférences.
         preferences: Preferences,
     },
+    /// Charger la progression des exercices d'un profil.
+    LoadProgress(ProfileId),
+    /// Enregistrer une tentative d'exercice.
+    RecordAttempt {
+        /// Profil.
+        profile: ProfileId,
+        /// Exercice.
+        exercise: ContentId,
+        /// Issue.
+        outcome: Outcome,
+        /// Indices utilisés.
+        hints_used: u8,
+    },
 }
 
 /// Nature de l'opération ayant produit un état des profils.
@@ -73,6 +90,20 @@ pub enum AppEvent {
     Deleted(Result<Deletion, ProfileError>),
     /// Résultat d'un enregistrement de préférences.
     PreferencesSaved(Result<(), ProfileError>),
+    /// Progression chargée pour un profil.
+    ProgressLoaded {
+        /// Profil concerné (ignoré s'il n'est plus actif).
+        profile: ProfileId,
+        /// Résultat.
+        result: Result<ProgressMap, RepositoryError>,
+    },
+    /// Tentative enregistrée : progression à jour de l'exercice.
+    AttemptRecorded {
+        /// Profil concerné.
+        profile: ProfileId,
+        /// Résultat.
+        result: Result<(ContentId, ExerciseProgress), RepositoryError>,
+    },
 }
 
 /// Exécute un effet.
@@ -101,6 +132,22 @@ pub async fn execute(effect: Effect, services: &Services) -> AppEvent {
         Effect::SavePreferences { id, preferences } => {
             AppEvent::PreferencesSaved(profiles.save_preferences(id, preferences).await)
         }
+        Effect::LoadProgress(profile) => AppEvent::ProgressLoaded {
+            profile,
+            result: services.exercises.progress(profile).await,
+        },
+        Effect::RecordAttempt {
+            profile,
+            exercise,
+            outcome,
+            hints_used,
+        } => AppEvent::AttemptRecorded {
+            profile,
+            result: services
+                .exercises
+                .record(profile, exercise, outcome, hints_used)
+                .await,
+        },
     }
 }
 

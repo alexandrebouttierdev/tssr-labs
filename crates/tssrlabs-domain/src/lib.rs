@@ -5,6 +5,7 @@
 //! produisent ces types ; la présentation les affiche.
 
 pub mod content;
+pub mod exercise;
 pub mod host;
 pub mod preferences;
 pub mod profile;

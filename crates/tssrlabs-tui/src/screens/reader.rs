@@ -8,6 +8,7 @@ use tssrlabs_domain::content::Chapter;
 
 use crate::app::App;
 use crate::i18n::msg;
+use crate::keymap::Command;
 use crate::markdown;
 use crate::screens::{difficulty_label_id, domain_label_id};
 use crate::text::sanitize;
@@ -53,6 +54,29 @@ pub fn chapter_lines(app: &App, theme: &Theme, chapter: &Chapter) -> Vec<Line<'s
         Line::styled(sanitize(&chapter.summary), theme.base),
         Line::from(""),
     ];
+    let exercises = catalog.exercises_for(&chapter.id);
+    if !exercises.is_empty() {
+        let solved = exercises
+            .iter()
+            .filter(|e| app.progress().get(&e.id).is_some_and(|p| p.solved))
+            .count();
+        let key = app
+            .keymap()
+            .primary_label(Command::OpenExercises, i18n)
+            .unwrap_or_default();
+        lines.push(Line::styled(
+            i18n.t_args(
+                msg::READER_EXERCISES,
+                &[
+                    ("count", exercises.len().into()),
+                    ("solved", solved.into()),
+                    ("key", key.into()),
+                ],
+            ),
+            theme.accent,
+        ));
+        lines.push(Line::from(""));
+    }
 
     section(
         &mut lines,

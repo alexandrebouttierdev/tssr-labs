@@ -1,8 +1,8 @@
 //! Tableau de bord.
 //!
-//! Il n'affiche que des informations réelles : profil actif et absence
-//! d'activité tant que les cours ne sont pas disponibles. Niveau,
-//! compétences et recommandations arriveront avec la progression.
+//! Il n'affiche que des informations réelles : profil actif, contenu
+//! disponible et exercices réussis. Niveau, compétences et recommandations
+//! arriveront avec la progression.
 
 use ratatui::Frame;
 use ratatui::layout::{Alignment, Constraint, Layout, Rect};
@@ -12,6 +12,28 @@ use ratatui::widgets::{Paragraph, Wrap};
 use crate::app::App;
 use crate::i18n::msg;
 use crate::theme::Theme;
+
+/// Ligne d'activité : exercices réussis, ou absence d'activité.
+fn activity(app: &App, theme: &Theme) -> Line<'static> {
+    let i18n = app.i18n();
+    if app.progress().is_empty() {
+        return Line::styled(i18n.t(msg::HOME_NO_ACTIVITY), theme.base);
+    }
+    let total = app.catalog().exercises().len();
+    let solved = app
+        .catalog()
+        .exercises()
+        .iter()
+        .filter(|e| app.progress().get(&e.id).is_some_and(|p| p.solved))
+        .count();
+    Line::styled(
+        i18n.t_args(
+            msg::HOME_EXERCISES,
+            &[("solved", solved.into()), ("total", total.into())],
+        ),
+        theme.base,
+    )
+}
 
 /// Dessine le tableau de bord.
 pub fn render(app: &App, theme: &Theme, frame: &mut Frame, area: Rect) {
@@ -32,7 +54,7 @@ pub fn render(app: &App, theme: &Theme, frame: &mut Frame, area: Rect) {
             ),
             Line::styled(i18n.t(msg::APP_SUBTITLE), theme.muted),
             Line::from(""),
-            Line::styled(i18n.t(msg::HOME_NO_ACTIVITY), theme.base),
+            activity(app, theme),
             Line::styled(
                 i18n.t_args(
                     msg::HOME_CONTENT,

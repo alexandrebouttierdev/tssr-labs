@@ -54,6 +54,7 @@ pub fn render(app: &App, frame: &mut Frame) {
         Screen::Paths => screens::paths::render(app, &theme, mode, frame, content),
         Screen::Library => screens::library::render(app, &theme, mode, frame, content),
         Screen::Reader => screens::reader::render(app, &theme, frame, content),
+        Screen::Exercise => screens::exercise::render(app, &theme, frame, content),
         Screen::Profiles => screens::profiles::render(app, &theme, mode, frame, content),
         Screen::Diagnostic => screens::diagnostic::render(app, &theme, frame, content, area),
     }
@@ -96,6 +97,12 @@ mod tests {
             kind: KeyEventKind::Press,
             state: KeyEventState::NONE,
         }));
+    }
+
+    fn type_text(app: &mut App, text: &str) {
+        for c in text.chars() {
+            send(app, KeyCode::Char(c));
+        }
     }
 
     fn assert_contains(text: &str, expected: &[&str]) {
@@ -342,5 +349,109 @@ mod tests {
                 send(app, KeyCode::Tab);
             }
         }
+    }
+
+    #[test]
+    fn exercise_screen_renders_choices_feedback_and_text_notice() {
+        let mut app = loaded_app(&["Alice"], Some(0));
+        go_to(&mut app, Screen::Library);
+        send(&mut app, KeyCode::Enter);
+        let reader = rendered(&app, 100, 30);
+        assert_contains(
+            &reader,
+            &[
+                "2 exercices · 0 réussi(s) · e pour commencer",
+                "e Exercices",
+            ],
+        );
+
+        send(&mut app, KeyCode::Char('e'));
+        let qcm = rendered(&app, 100, 30);
+        assert_contains(
+            &qcm,
+            &[
+                "Exercice 1/2 — Question à choix multiples",
+                "[ ] 1. Utilisateur",
+                "Une seule réponse.",
+                "Aucune tentative enregistrée",
+                "Entrée Valider",
+                "F2 Indice",
+            ],
+        );
+
+        send(&mut app, KeyCode::Char('2'));
+        send(&mut app, KeyCode::Enter);
+        let done = rendered(&app, 100, 30);
+        assert_contains(
+            &done,
+            &[
+                "[x] 2. Root ✓",
+                "✓ Bonne réponse.",
+                "Explication : # indique root.",
+                "Entrée : exercice suivant",
+            ],
+        );
+
+        send(&mut app, KeyCode::Enter);
+        send(&mut app, KeyCode::F(2));
+        type_text(&mut app, "cd");
+        let text = rendered(&app, 100, 30);
+        assert_contains(
+            &text,
+            &[
+                "Commande à rédiger",
+                "Réponse : cd",
+                "n'est pas exécutée",
+                "Indice 1 : cd",
+            ],
+        );
+        send(&mut app, KeyCode::Enter);
+        assert_contains(&rendered(&app, 100, 30), &["✗ Réponse incorrecte"]);
+        send(&mut app, KeyCode::F(3));
+        assert_contains(
+            &rendered(&app, 100, 30),
+            &["Solution : cd -", "Explication"],
+        );
+    }
+
+    #[test]
+    fn exercise_screen_warns_when_nothing_is_recorded() {
+        let mut app = loaded_app(&["Alice"], None);
+        send(&mut app, KeyCode::Esc);
+        go_to(&mut app, Screen::Library);
+        send(&mut app, KeyCode::Enter);
+        send(&mut app, KeyCode::Char('e'));
+        assert_contains(
+            &rendered(&app, 100, 30),
+            &["Aucun profil actif : les tentatives ne sont pas enregistrées."],
+        );
+        for (w, h) in [(1, 1), (60, 16), (80, 24), (250, 80)] {
+            let _ = rendered(&app, w, h);
+        }
+    }
+
+    #[test]
+    fn dashboard_counts_solved_exercises() {
+        use crate::effects::AppEvent;
+        use tssrlabs_domain::exercise::ExerciseProgress;
+        use tssrlabs_domain::profile::ProfileId;
+
+        let mut app = loaded_app(&["Alice"], Some(0));
+        assert_contains(&rendered(&app, 100, 30), &["Aucune activité enregistrée"]);
+        let mut progress = tssrlabs_application::exercises::ProgressMap::new();
+        progress.insert(
+            tssrlabs_domain::content::ContentId::parse("ex-cd").unwrap(),
+            ExerciseProgress {
+                attempts: 2,
+                solved: true,
+                revealed: false,
+                fewest_hints: Some(0),
+            },
+        );
+        app.handle_app_event(AppEvent::ProgressLoaded {
+            profile: ProfileId::new(1),
+            result: Ok(progress),
+        });
+        assert_contains(&rendered(&app, 100, 30), &["Exercices réussis : 1 sur 2."]);
     }
 }

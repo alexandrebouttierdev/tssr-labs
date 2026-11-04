@@ -14,7 +14,7 @@ use crate::text::ellipsize_middle;
 use crate::theme::{Theme, theme_label_id};
 
 /// Nombre de lignes du diagnostic.
-pub const ROW_COUNT: usize = 11;
+pub const ROW_COUNT: usize = 12;
 
 const HIGHLIGHT: &str = "› ";
 
@@ -74,6 +74,18 @@ pub fn rows(app: &App, terminal_size: (u16, u16)) -> [(String, String); ROW_COUN
         (msg::DIAG_CONFIG, env.config_dir.display().to_string()),
         (msg::DIAG_LOGS, env.log_dir.display().to_string()),
         (msg::DIAG_DATABASE, env.database_file.display().to_string()),
+        (
+            msg::DIAG_CONTENT,
+            i18n.t_args(
+                msg::DIAG_CONTENT_VALUE,
+                &[
+                    ("paths", app.catalog().paths().len().into()),
+                    ("chapters", app.catalog().chapters().len().into()),
+                    ("format", env.content_format.into()),
+                    ("warnings", app.catalog().warnings().len().into()),
+                ],
+            ),
+        ),
     ]
     .map(|(label, value)| (i18n.t(label), value))
 }
@@ -121,11 +133,11 @@ pub fn render(app: &App, theme: &Theme, frame: &mut Frame, area: Rect, terminal:
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::tests::test_env;
+    use crate::app::tests::{test_catalog, test_env};
 
     #[test]
     fn rows_describe_host_and_paths() {
-        let app = App::new(test_env(ColorSupport::Ansi256));
+        let app = App::new(test_env(ColorSupport::Ansi256), test_catalog());
         let rows = rows(&app, (120, 40));
         let text: Vec<String> = rows.iter().map(|(l, v)| format!("{l}={v}")).collect();
         assert!(

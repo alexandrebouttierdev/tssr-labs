@@ -33,6 +33,18 @@ pub fn render(app: &App, theme: &Theme, frame: &mut Frame, area: Rect) {
             Line::styled(i18n.t(msg::APP_SUBTITLE), theme.muted),
             Line::from(""),
             Line::styled(i18n.t(msg::HOME_NO_ACTIVITY), theme.base),
+            Line::styled(
+                i18n.t_args(
+                    msg::HOME_CONTENT,
+                    &[
+                        ("paths", app.catalog().paths().len().into()),
+                        ("chapters", app.catalog().chapters().len().into()),
+                    ],
+                ),
+                theme.base,
+            ),
+            Line::styled(i18n.t(msg::HOME_START_HINT), theme.accent),
+            Line::from(""),
             Line::styled(i18n.t(msg::HOME_UPCOMING), theme.muted),
             Line::from(""),
             version,

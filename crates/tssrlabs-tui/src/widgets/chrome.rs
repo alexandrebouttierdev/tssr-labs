@@ -43,17 +43,21 @@ pub fn header(app: &App, theme: &Theme, mode: LayoutMode, frame: &mut Frame, are
         ),
         None => i18n.t(msg::STATUS_NO_PROFILE),
     };
-    let status = if mode == LayoutMode::Full {
-        let theme_name = i18n.t_args(
+    // Le statut ne doit jamais recouvrir les onglets : le thème est retiré
+    // en premier, le nom du profil en dernier (raccourci au besoin).
+    let room = usize::from(area.width).saturating_sub(tabs_width + 2);
+    let with_theme = format!(
+        "{profile} · {} ",
+        i18n.t_args(
             msg::STATUS_THEME,
             &[("name", i18n.t(theme_label_id(theme.kind)).into())],
-        );
-        format!("{profile} · {theme_name} ")
+        )
+    );
+    let status = if mode == LayoutMode::Full && with_theme.chars().count() <= room {
+        with_theme
     } else {
         format!("{profile} ")
     };
-    // Le statut ne doit jamais recouvrir les onglets.
-    let room = usize::from(area.width).saturating_sub(tabs_width + 2);
     frame.render_widget(
         Paragraph::new(Line::styled(ellipsize_middle(&status, room), theme.muted))
             .alignment(Alignment::Right),
@@ -116,6 +120,30 @@ pub fn footer(app: &App, theme: &Theme, mode: LayoutMode, frame: &mut Frame, are
                 commands.extend([Command::RenameProfile, Command::DeleteProfile]);
             }
         }
+        Screen::Library if app.library().searching => {
+            let hint = i18n.t_args(
+                msg::LIBRARY_SEARCH_DONE,
+                &[
+                    ("enter", i18n.t(msg::KEY_ENTER).into()),
+                    ("esc", i18n.t(msg::KEY_ESC).into()),
+                ],
+            );
+            frame.render_widget(
+                Paragraph::new(Line::styled(format!(" {hint}"), theme.muted)),
+                area,
+            );
+            return;
+        }
+        Screen::Library => commands.extend([
+            Command::Activate,
+            Command::FocusSearch,
+            Command::CycleDomain,
+            Command::CycleDifficulty,
+            Command::CycleDuration,
+            Command::ClearFilters,
+        ]),
+        Screen::Paths => commands.push(Command::Activate),
+        Screen::Reader => commands.extend([Command::Close, Command::Down, Command::PageDown]),
         Screen::Diagnostic if full => commands.extend([Command::Up, Command::Down]),
         _ => {}
     }
@@ -141,6 +169,17 @@ pub fn footer(app: &App, theme: &Theme, mode: LayoutMode, frame: &mut Frame, are
     frame.render_widget(Paragraph::new(line), area);
 }
 
+/// Libellé d'une commande selon l'écran (« Ouvrir » un chapitre,
+/// « Retour » depuis la lecture).
+pub fn command_label(app: &App, command: Command) -> String {
+    let id = match (app.screen(), command) {
+        (Screen::Library | Screen::Paths, Command::Activate) => msg::CMD_OPEN,
+        (Screen::Reader, Command::Close) => msg::CMD_BACK,
+        _ => command.label_id(),
+    };
+    app.i18n().t(id)
+}
+
 /// Ligne « touche libellé » pour une liste de commandes.
 pub fn hints(app: &App, theme: &Theme, commands: &[Command]) -> Line<'static> {
     let i18n = app.i18n();
@@ -151,7 +190,7 @@ pub fn hints(app: &App, theme: &Theme, commands: &[Command]) -> Line<'static> {
         };
         spans.push(Span::styled(key, theme.accent));
         spans.push(Span::styled(
-            format!(" {}  ", i18n.t(command.label_id())),
+            format!(" {}  ", command_label(app, *command)),
             theme.muted,
         ));
     }

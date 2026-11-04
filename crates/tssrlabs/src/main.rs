@@ -14,6 +14,7 @@ use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
 use tssrlabs_application::Services;
 use tssrlabs_application::profiles::ProfileService;
+use tssrlabs_infrastructure::content::{self, ContentError};
 use tssrlabs_infrastructure::host;
 use tssrlabs_infrastructure::logging::{self, LoggingError};
 use tssrlabs_infrastructure::paths::{AppPaths, PathsError};
@@ -41,6 +42,8 @@ enum AppError {
     Logging(#[from] LoggingError),
     #[error(transparent)]
     Database(#[from] DbError),
+    #[error(transparent)]
+    Content(#[from] ContentError),
     #[error("impossible de démarrer le moteur asynchrone")]
     Runtime(#[source] std::io::Error),
     #[error("impossible de préparer le terminal")]
@@ -115,7 +118,19 @@ fn run() -> Result<(), AppError> {
         config_dir: paths.config_dir().to_path_buf(),
         log_dir: paths.log_dir().to_path_buf(),
         database_file: paths.database_file(),
+        content_format: content::FORMAT_VERSION,
     };
+
+    // Contenu embarqué : validé par les tests, revalidé ici par sécurité.
+    let catalog = Arc::new(content::load_embedded()?);
+    for warning in catalog.warnings() {
+        tracing::warn!(%warning, "avertissement de contenu");
+    }
+    tracing::info!(
+        paths = catalog.paths().len(),
+        chapters = catalog.chapters().len(),
+        "contenu chargé"
+    );
 
     // Ouverture synchrone avant l'interface : une base illisible ou plus
     // récente doit être signalée clairement, sans rien modifier.
@@ -132,7 +147,7 @@ fn run() -> Result<(), AppError> {
         .thread_name("tssrlabs-worker")
         .build()
         .map_err(AppError::Runtime)?;
-    let result = runtime.block_on(run_interface(env, services));
+    let result = runtime.block_on(run_interface(env, catalog, services));
     // Aucune tâche ne doit survivre : `run_interface` a déjà attendu les
     // siennes ; on borne néanmoins l'arrêt du runtime.
     runtime.shutdown_timeout(std::time::Duration::from_secs(2));
@@ -148,14 +163,18 @@ fn run() -> Result<(), AppError> {
 }
 
 /// Lance l'interface et orchestre l'arrêt ordonné des tâches de fond.
-async fn run_interface(env: Environment, services: Services) -> Result<(), AppError> {
+async fn run_interface(
+    env: Environment,
+    catalog: Arc<tssrlabs_domain::content::Catalog>,
+    services: Services,
+) -> Result<(), AppError> {
     let shutdown = CancellationToken::new();
     let tasks = TaskTracker::new();
     tasks.spawn(cancel_on_signal(shutdown.clone()));
 
     let result = {
         let mut session = TerminalSession::enter().map_err(AppError::TerminalSetup)?;
-        let mut app = App::new(env);
+        let mut app = App::new(env, catalog);
         tssrlabs_tui::run::run(session.terminal_mut(), &mut app, services, &shutdown).await
         // `session` est détruite ici : le terminal est restauré avant tout
         // affichage d'erreur sur la sortie standard.

@@ -16,6 +16,7 @@ pub mod effects;
 pub mod i18n;
 pub mod keymap;
 pub mod layout;
+pub mod markdown;
 pub mod run;
 mod screens;
 pub mod terminal;

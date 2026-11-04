@@ -1,4 +1,4 @@
-//! Raccourcis clavier : commandes, liaisons et détection des conflits.
+//! Raccourcis clavier : commandes, contextes, liaisons et conflits.
 //!
 //! Les liaisons portent sur le **caractère produit** par la touche (et non
 //! sur sa position physique) : `q` ou `?` fonctionnent à l'identique en
@@ -6,12 +6,26 @@
 //! Chaque commande essentielle possède aussi une touche non alphabétique
 //! (F1, Tab, flèches) indépendante de la disposition.
 //!
-//! La personnalisation par l'utilisateur sera persistée avec les préférences
-//! (tranche 2) ; [`Keymap::bind`] et [`Keymap::conflicts`] la préparent.
+//! Chaque commande appartient à un [`Context`] : une même touche peut servir
+//! dans deux écrans différents. Un conflit n'existe qu'entre commandes d'un
+//! même contexte, ou entre une commande globale et une autre.
 
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
 use crate::i18n::{Localizer, msg};
+
+/// Contexte d'application d'une commande.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Context {
+    /// Partout.
+    Global,
+    /// Écran Profils.
+    Profiles,
+    /// Bibliothèque.
+    Library,
+    /// Lecture d'un chapitre.
+    Reader,
+}
 
 /// Commandes déclenchables au clavier.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -20,7 +34,7 @@ pub enum Command {
     Quit,
     /// Afficher ou masquer l'aide.
     ToggleHelp,
-    /// Fermer la fenêtre superposée active.
+    /// Fermer / revenir.
     Close,
     /// Écran suivant.
     NextScreen,
@@ -28,11 +42,11 @@ pub enum Command {
     PrevScreen,
     /// Thème suivant.
     CycleTheme,
-    /// Élément précédent.
+    /// Élément précédent / défiler vers le haut.
     Up,
-    /// Élément suivant.
+    /// Élément suivant / défiler vers le bas.
     Down,
-    /// Activer l'élément sélectionné.
+    /// Activer ou ouvrir l'élément sélectionné.
     Activate,
     /// Créer un profil.
     NewProfile,
@@ -40,24 +54,65 @@ pub enum Command {
     RenameProfile,
     /// Supprimer le profil sélectionné.
     DeleteProfile,
+    /// Saisir une recherche.
+    FocusSearch,
+    /// Filtre de domaine suivant.
+    CycleDomain,
+    /// Filtre de niveau suivant.
+    CycleDifficulty,
+    /// Filtre de durée suivant.
+    CycleDuration,
+    /// Effacer recherche et filtres.
+    ClearFilters,
+    /// Page précédente.
+    PageUp,
+    /// Page suivante.
+    PageDown,
+    /// Début.
+    Top,
+    /// Fin.
+    Bottom,
 }
 
 impl Command {
     /// Ordre d'affichage dans l'aide.
-    pub const ALL: [Self; 12] = [
+    pub const ALL: [Self; 21] = [
         Self::NextScreen,
         Self::PrevScreen,
         Self::Up,
         Self::Down,
         Self::Activate,
+        Self::Close,
+        Self::CycleTheme,
+        Self::ToggleHelp,
+        Self::Quit,
         Self::NewProfile,
         Self::RenameProfile,
         Self::DeleteProfile,
-        Self::CycleTheme,
-        Self::ToggleHelp,
-        Self::Close,
-        Self::Quit,
+        Self::FocusSearch,
+        Self::CycleDomain,
+        Self::CycleDifficulty,
+        Self::CycleDuration,
+        Self::ClearFilters,
+        Self::PageUp,
+        Self::PageDown,
+        Self::Top,
+        Self::Bottom,
     ];
+
+    /// Contexte de la commande.
+    pub fn context(self) -> Context {
+        match self {
+            Self::NewProfile | Self::RenameProfile | Self::DeleteProfile => Context::Profiles,
+            Self::FocusSearch
+            | Self::CycleDomain
+            | Self::CycleDifficulty
+            | Self::CycleDuration
+            | Self::ClearFilters => Context::Library,
+            Self::PageUp | Self::PageDown | Self::Top | Self::Bottom => Context::Reader,
+            _ => Context::Global,
+        }
+    }
 
     /// Identifiant du libellé localisé.
     pub fn label_id(self) -> &'static str {
@@ -74,6 +129,15 @@ impl Command {
             Self::NewProfile => msg::CMD_NEW_PROFILE,
             Self::RenameProfile => msg::CMD_RENAME_PROFILE,
             Self::DeleteProfile => msg::CMD_DELETE_PROFILE,
+            Self::FocusSearch => msg::CMD_FOCUS_SEARCH,
+            Self::CycleDomain => msg::CMD_CYCLE_DOMAIN,
+            Self::CycleDifficulty => msg::CMD_CYCLE_DIFFICULTY,
+            Self::CycleDuration => msg::CMD_CYCLE_DURATION,
+            Self::ClearFilters => msg::CMD_CLEAR_FILTERS,
+            Self::PageUp => msg::CMD_PAGE_UP,
+            Self::PageDown => msg::CMD_PAGE_DOWN,
+            Self::Top => msg::CMD_TOP,
+            Self::Bottom => msg::CMD_BOTTOM,
         }
     }
 }
@@ -129,6 +193,10 @@ impl KeyBinding {
             KeyCode::Left => i18n.t(msg::KEY_LEFT),
             KeyCode::Right => i18n.t(msg::KEY_RIGHT),
             KeyCode::Delete => i18n.t(msg::KEY_DELETE),
+            KeyCode::PageUp => i18n.t(msg::KEY_PAGE_UP),
+            KeyCode::PageDown => i18n.t(msg::KEY_PAGE_DOWN),
+            KeyCode::Home => i18n.t(msg::KEY_HOME),
+            KeyCode::End => i18n.t(msg::KEY_END),
             other => format!("{other:?}"),
         };
         parts.push(key);
@@ -149,7 +217,7 @@ fn normalize(code: KeyCode, modifiers: KeyModifiers) -> KeyBinding {
     KeyBinding { code, modifiers }
 }
 
-/// Liaison partagée par plusieurs commandes.
+/// Liaison partagée par des commandes qui peuvent être actives ensemble.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Conflict {
     /// Touche en conflit.
@@ -166,7 +234,9 @@ pub struct Keymap {
 
 impl Default for Keymap {
     fn default() -> Self {
-        use KeyCode::{BackTab, Char, Delete, Down, Enter, Esc, F, Tab, Up};
+        use KeyCode::{
+            BackTab, Char, Delete, Down, End, Enter, Esc, F, Home, PageDown, PageUp, Tab, Up,
+        };
         let plain = KeyBinding::plain;
         Self {
             bindings: vec![
@@ -187,21 +257,36 @@ impl Default for Keymap {
                 (plain(Char('r')), Command::RenameProfile),
                 (plain(Char('s')), Command::DeleteProfile),
                 (plain(Delete), Command::DeleteProfile),
+                (plain(Char('/')), Command::FocusSearch),
+                (plain(Char('d')), Command::CycleDomain),
+                (plain(Char('f')), Command::CycleDifficulty),
+                (plain(Char('m')), Command::CycleDuration),
+                (plain(Char('x')), Command::ClearFilters),
+                (plain(PageUp), Command::PageUp),
+                (plain(PageDown), Command::PageDown),
+                (plain(Char(' ')), Command::PageDown),
+                (plain(Home), Command::Top),
+                (plain(End), Command::Bottom),
             ],
         }
     }
 }
 
+fn may_overlap(a: Context, b: Context) -> bool {
+    a == b || a == Context::Global || b == Context::Global
+}
+
 impl Keymap {
-    /// Commande associée à un événement clavier (appuis uniquement : sous
-    /// Windows, les relâchements sont aussi signalés).
-    pub fn command_for(&self, key: &KeyEvent) -> Option<Command> {
+    /// Commande associée à un événement clavier dans un contexte (appuis
+    /// uniquement : sous Windows, les relâchements sont aussi signalés).
+    pub fn command_for(&self, key: &KeyEvent, context: Context) -> Option<Command> {
         if key.kind != KeyEventKind::Press {
             return None;
         }
         let binding = KeyBinding::from_event(key);
         self.bindings
             .iter()
+            .filter(|(_, c)| c.context() == Context::Global || c.context() == context)
             .find(|(b, _)| *b == binding)
             .map(|(_, command)| *command)
     }
@@ -227,22 +312,29 @@ impl Keymap {
         }
     }
 
-    /// Touches liées à plusieurs commandes différentes.
+    /// Touches liées à plusieurs commandes pouvant être actives en même temps.
     pub fn conflicts(&self) -> Vec<Conflict> {
         let mut conflicts: Vec<Conflict> = Vec::new();
-        for (binding, command) in &self.bindings {
-            match conflicts.iter_mut().find(|c| c.binding == *binding) {
-                Some(conflict) if !conflict.commands.contains(command) => {
-                    conflict.commands.push(*command);
+        for (i, (binding, a)) in self.bindings.iter().enumerate() {
+            for (other, b) in &self.bindings[i + 1..] {
+                if other != binding || a == b || !may_overlap(a.context(), b.context()) {
+                    continue;
                 }
-                Some(_) => {}
-                None => conflicts.push(Conflict {
-                    binding: *binding,
-                    commands: vec![*command],
-                }),
+                match conflicts.iter_mut().find(|c| c.binding == *binding) {
+                    Some(conflict) => {
+                        for command in [*a, *b] {
+                            if !conflict.commands.contains(&command) {
+                                conflict.commands.push(command);
+                            }
+                        }
+                    }
+                    None => conflicts.push(Conflict {
+                        binding: *binding,
+                        commands: vec![*a, *b],
+                    }),
+                }
             }
         }
-        conflicts.retain(|c| c.commands.len() > 1);
         conflicts
     }
 }
@@ -266,6 +358,10 @@ mod tests {
         event(code, modifiers, KeyEventKind::Press)
     }
 
+    fn global(keymap: &Keymap, code: KeyCode, modifiers: KeyModifiers) -> Option<Command> {
+        keymap.command_for(&press(code, modifiers), Context::Global)
+    }
+
     #[test]
     fn default_keymap_has_no_conflict() {
         assert_eq!(Keymap::default().conflicts(), vec![]);
@@ -283,11 +379,11 @@ mod tests {
     fn letters_ignore_case_and_shift() {
         let keymap = Keymap::default();
         assert_eq!(
-            keymap.command_for(&press(KeyCode::Char('Q'), KeyModifiers::SHIFT)),
+            global(&keymap, KeyCode::Char('Q'), KeyModifiers::SHIFT),
             Some(Command::Quit)
         );
         assert_eq!(
-            keymap.command_for(&press(KeyCode::Char('C'), KeyModifiers::CONTROL)),
+            global(&keymap, KeyCode::Char('C'), KeyModifiers::CONTROL),
             Some(Command::Quit)
         );
     }
@@ -297,11 +393,11 @@ mod tests {
         // AZERTY : « ? » s'obtient avec Maj ; seul le caractère compte.
         let keymap = Keymap::default();
         assert_eq!(
-            keymap.command_for(&press(KeyCode::Char('?'), KeyModifiers::SHIFT)),
+            global(&keymap, KeyCode::Char('?'), KeyModifiers::SHIFT),
             Some(Command::ToggleHelp)
         );
         assert_eq!(
-            keymap.command_for(&press(KeyCode::BackTab, KeyModifiers::SHIFT)),
+            global(&keymap, KeyCode::BackTab, KeyModifiers::SHIFT),
             Some(Command::PrevScreen)
         );
     }
@@ -310,29 +406,59 @@ mod tests {
     fn releases_and_plain_c_are_ignored() {
         let keymap = Keymap::default();
         assert_eq!(
-            keymap.command_for(&event(
-                KeyCode::Char('q'),
-                KeyModifiers::NONE,
-                KeyEventKind::Release
-            )),
+            keymap.command_for(
+                &event(
+                    KeyCode::Char('q'),
+                    KeyModifiers::NONE,
+                    KeyEventKind::Release
+                ),
+                Context::Global
+            ),
             None
         );
         assert_eq!(
-            keymap.command_for(&press(KeyCode::Char('c'), KeyModifiers::NONE)),
+            global(&keymap, KeyCode::Char('c'), KeyModifiers::NONE),
             None
         );
     }
 
     #[test]
+    fn screen_commands_only_apply_in_their_context() {
+        let keymap = Keymap::default();
+        let n = press(KeyCode::Char('n'), KeyModifiers::NONE);
+        assert_eq!(
+            keymap.command_for(&n, Context::Profiles),
+            Some(Command::NewProfile)
+        );
+        assert_eq!(keymap.command_for(&n, Context::Library), None);
+        let d = press(KeyCode::Char('d'), KeyModifiers::NONE);
+        assert_eq!(
+            keymap.command_for(&d, Context::Library),
+            Some(Command::CycleDomain)
+        );
+        assert_eq!(keymap.command_for(&d, Context::Profiles), None);
+        // Les commandes globales restent disponibles partout.
+        let q = press(KeyCode::Char('q'), KeyModifiers::NONE);
+        assert_eq!(keymap.command_for(&q, Context::Reader), Some(Command::Quit));
+    }
+
+    #[test]
+    fn same_key_in_distinct_screens_is_not_a_conflict() {
+        let mut keymap = Keymap::default();
+        keymap.bind(KeyBinding::plain(KeyCode::Char('n')), Command::CycleDomain);
+        assert_eq!(keymap.conflicts(), vec![]);
+    }
+
+    #[test]
     fn conflicting_binding_is_reported() {
         let mut keymap = Keymap::default();
-        keymap.bind(KeyBinding::plain(KeyCode::Char('Q')), Command::CycleTheme);
+        keymap.bind(KeyBinding::plain(KeyCode::Char('Q')), Command::CycleDomain);
         let conflicts = keymap.conflicts();
         assert_eq!(conflicts.len(), 1);
         assert_eq!(conflicts[0].binding, KeyBinding::plain(KeyCode::Char('q')));
         assert_eq!(
             conflicts[0].commands,
-            vec![Command::Quit, Command::CycleTheme]
+            vec![Command::Quit, Command::CycleDomain]
         );
     }
 
@@ -343,5 +469,6 @@ mod tests {
         assert_eq!(KeyBinding::plain(KeyCode::Esc).label(&i18n), "Échap");
         assert_eq!(KeyBinding::plain(KeyCode::F(1)).label(&i18n), "F1");
         assert_eq!(KeyBinding::plain(KeyCode::Char('?')).label(&i18n), "?");
+        assert_eq!(KeyBinding::plain(KeyCode::PageDown).label(&i18n), "PgSuiv");
     }
 }

@@ -15,7 +15,7 @@ screen-diagnostic = Diagnostic
 ## Accueil
 
 home-version = Version { $version }
-home-upcoming = Les cours et les exercices arrivent dans la prochaine version.
+home-upcoming = Les exercices guidés arrivent dans la prochaine version.
 home-greeting = Bonjour, { $name }
 home-no-activity = Aucune activité enregistrée pour ce profil.
 home-no-profile = Aucun profil actif.
@@ -139,3 +139,80 @@ colors-forced = { $level } (imposé par TSSRLABS_COLORS)
 layout-full = affichage complet
 layout-compact = affichage compact
 size-value = { $width }×{ $height } — { $mode }
+
+## Contenu pédagogique
+
+screen-paths = Parcours
+screen-library = Bibliothèque
+screen-reader = Chapitre
+cmd-open = Ouvrir
+cmd-back = Retour
+cmd-focus-search = Rechercher
+cmd-cycle-domain = Domaine
+cmd-cycle-difficulty = Niveau
+cmd-cycle-duration = Durée
+cmd-clear-filters = Effacer les filtres
+cmd-page-up = Page précédente
+cmd-page-down = Page suivante
+cmd-top = Début
+cmd-bottom = Fin
+key-page-up = PgPréc
+key-page-down = PgSuiv
+key-home = Début
+key-end = Fin
+domain-linux = Linux
+domain-windows = Windows
+domain-reseau = Réseaux
+domain-systeme = Systèmes
+domain-securite = Sécurité
+domain-virtualisation = Virtualisation
+domain-depannage = Dépannage
+domain-automatisation = Automatisation
+difficulty-debutant = Débutant
+difficulty-intermediaire = Intermédiaire
+difficulty-avance = Avancé
+library-search = Recherche :
+library-search-hint = { $key } pour saisir un mot-clé
+library-search-done = { $enter } ou { $esc } : terminer la saisie
+library-filter-domain = Domaine : { $value }
+library-filter-difficulty = Niveau : { $value }
+library-filter-duration = Durée : { $value }
+library-all = tous
+library-any-duration = toutes
+library-max-minutes = ≤ { $minutes } min
+library-results = { $count ->
+    [0] Aucun chapitre
+    [one] 1 chapitre
+   *[other] { $count } chapitres
+}
+library-no-match = Aucun chapitre ne correspond à ces critères.
+library-col-title = Titre
+library-col-domain = Domaine
+library-col-level = Niveau
+library-col-duration = Durée
+minutes = { $minutes } min
+paths-summary = { $count ->
+    [one] 1 chapitre
+   *[other] { $count } chapitres
+}
+paths-empty = Aucun parcours disponible.
+paths-prerequisites = Prérequis : { $list }
+paths-no-prerequisite = Aucun prérequis.
+reader-objectives = Objectifs
+reader-prerequisites = Prérequis
+reader-skills = Compétences travaillées
+reader-sources = Sources
+reader-verified = vérifiée le { $date }
+reader-unverified = non vérifiée
+reader-meta = { $domain } · { $difficulty } · environ { $minutes } min · version { $version }
+reader-credits = Auteurs : { $authors } · Licence : { $license }
+reader-position = Position : { $percent } %
+reader-missing = Ce chapitre n'existe plus.
+home-content = Contenu disponible : { $paths } parcours, { $chapters } chapitres.
+home-start-hint = Ouvrez « Parcours » ou « Bibliothèque » pour commencer.
+diag-content = Contenu
+diag-content-value = { $paths } parcours, { $chapters } chapitres (format { $format }), { $warnings ->
+    [0] aucun avertissement
+    [one] 1 avertissement
+   *[other] { $warnings } avertissements
+}

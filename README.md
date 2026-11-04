@@ -16,6 +16,7 @@ Ce dépôt contient le cadrage initial, les décisions produit et techniques, un
 - [`docs/AI_INTEGRATION.md`](docs/AI_INTEGRATION.md) — fournisseurs, confidentialité et usages IA.
 - [`docs/DATA_AND_BACKUPS.md`](docs/DATA_AND_BACKUPS.md) — SQLite, profils, sauvegardes et snapshots.
 - [`docs/TESTING_AND_QUALITY.md`](docs/TESTING_AND_QUALITY.md) — stratégie de tests et critères de qualité.
+- [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md) — plan par tranches, état d'avancement et limites connues.
 - [`prompts/CLAUDE_CODE_MASTER_PROMPT.md`](prompts/CLAUDE_CODE_MASTER_PROMPT.md) — prompt de démarrage pour Claude Code.
 
 ## Principes non négociables
@@ -34,3 +35,35 @@ Ce dépôt contient le cadrage initial, les décisions produit et techniques, un
 2. Utiliser le prompt maître avec Claude Code.
 3. Demander à Claude Code de commencer par inspecter le dépôt et proposer une structure initiale, sans générer tout le produit en une seule passe.
 4. Développer par tranches verticales testées et compilables.
+
+## Développement
+
+État actuel : **tranche 2 (profils locaux et préférences dans SQLite)** — livrable de la phase 0 : l'application démarre, crée ou choisit un profil, affiche un tableau de bord (vide tant qu'aucune activité n'existe) et enregistre ses préférences. Voir [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md).
+
+Prérequis : [rustup](https://rustup.rs). La toolchain est épinglée dans `rust-toolchain.toml` et installée automatiquement.
+
+```sh
+cargo run                      # lance l'interface (q ou Échap pour quitter)
+cargo run -- --paths           # affiche les répertoires de données, configuration et journaux
+cargo fmt --all --check
+cargo clippy --workspace --all-targets -- -D warnings
+cargo test --workspace
+cargo build --release          # binaire : target/release/tssrlabs
+```
+
+Variables d'environnement :
+
+- `TSSRLABS_HOME` : regroupe données, configuration et journaux sous un seul répertoire (installation portable, tests).
+- `TSSRLABS_LOG` : niveau des journaux locaux (`info` par défaut ; ex. `debug`).
+- `TSSRLABS_COLORS` : impose le niveau de couleurs (`none`, `16`, `256`, `truecolor`) si la détection automatique se trompe.
+- `NO_COLOR` : désactive les couleurs ([no-color.org](https://no-color.org)).
+
+Raccourcis : `Tab`/`Maj+Tab` changer d'écran, `t` thème, `F1` ou `?` aide, `q` quitter ; sur l'écran Profils : `Entrée` activer, `n` créer, `r` renommer, `s` ou `Suppr` supprimer. L'affichage complet demande 100×30 ; le mode compact s'active jusqu'à 60×16.
+
+Les journaux sont uniquement locaux ; les secrets reconnaissables y sont masqués. Aucune donnée n'est envoyée sur le réseau.
+
+Données locales : base SQLite `tssrlabs.sqlite3` dans le répertoire de données (voir `tssrlabs --paths`). Avant une migration de schéma ou la suppression d'un profil, une copie de sécurité est créée dans `copies-de-securite/` ; pour restaurer, fermer l'application et remplacer `tssrlabs.sqlite3` par la copie voulue.
+
+## Licence
+
+Code sous licence [MIT](LICENSE). Chaque scénario conserve sa propre licence et ses crédits.

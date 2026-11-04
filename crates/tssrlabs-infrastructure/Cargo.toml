@@ -1,0 +1,30 @@
+[package]
+name = "tssrlabs-infrastructure"
+description = "Adaptateurs d'infrastructure de TSSR Labs (chemins, journaux, puis SQLite, conteneurs…)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+directories.workspace = true
+futures-util.workspace = true
+jiff.workspace = true
+regex.workspace = true
+rusqlite.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tssrlabs-application.workspace = true
+tssrlabs-domain.workspace = true
+tracing.workspace = true
+tracing-appender.workspace = true
+tracing-subscriber.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt", "macros"] }
+tempfile.workspace = true
+
+[lints]
+workspace = true

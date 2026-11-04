@@ -7,7 +7,10 @@ use tssrlabs_domain::content::{
     Catalog, Chapter, ContentId, Difficulty, LearningPath, LibraryQuery,
 };
 
-use super::{App, Screen};
+use tssrlabs_domain::progression::ChapterStatus;
+
+use super::{App, Notice, Screen};
+use crate::i18n::msg;
 use crate::keymap::Command;
 use crate::widgets::input::TextInput;
 
@@ -115,12 +118,35 @@ impl App {
                 }
             }
             (Screen::Paths, Command::Activate) => {
-                if let Some(id) = self
+                let Some(chapter) = self
                     .path_entries()
                     .get(self.paths_row)
-                    .map(|(_, c)| c.id.clone())
+                    .map(|(_, c)| (*c).clone())
+                else {
+                    return true;
+                };
+                // Parcours guidé : un chapitre verrouillé ne s'ouvre pas (la
+                // bibliothèque, elle, reste en accès libre).
+                match self.report.chapter_status(&self.catalog, &chapter) {
+                    ChapterStatus::Locked { missing } => {
+                        let titles: Vec<String> = missing
+                            .iter()
+                            .filter_map(|id| self.catalog.chapter(id))
+                            .map(|c| c.title.clone())
+                            .collect();
+                        self.notice = Some(Notice::Info(self.i18n.t_args(
+                            msg::PATHS_LOCKED,
+                            &[("titles", titles.join(" », « ").into())],
+                        )));
+                    }
+                    _ => self.open_chapter(chapter.id, Screen::Paths),
+                }
+            }
+            (Screen::Home, Command::Activate) => {
+                if self.active_profile().is_some()
+                    && let Some(id) = self.report.recommended(&self.catalog).map(|c| c.id.clone())
                 {
-                    self.open_chapter(id, Screen::Paths);
+                    self.open_chapter(id, Screen::Home);
                 }
             }
             (Screen::Library, Command::FocusSearch) => self.library.searching = true,

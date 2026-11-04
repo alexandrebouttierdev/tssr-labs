@@ -7,13 +7,13 @@
 
 use tokio::sync::mpsc;
 use tssrlabs_application::Services;
-use tssrlabs_application::exercises::ProgressMap;
 use tssrlabs_application::ports::RepositoryError;
 use tssrlabs_application::profiles::{Deletion, ProfileError, ProfilesSnapshot};
 use tssrlabs_domain::content::ContentId;
-use tssrlabs_domain::exercise::{ExerciseProgress, Outcome};
+use tssrlabs_domain::exercise::Outcome;
 use tssrlabs_domain::preferences::Preferences;
 use tssrlabs_domain::profile::ProfileId;
+use tssrlabs_domain::progression::AttemptRecord;
 
 /// Opération demandée à la couche application.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -94,15 +94,15 @@ pub enum AppEvent {
     ProgressLoaded {
         /// Profil concerné (ignoré s'il n'est plus actif).
         profile: ProfileId,
-        /// Résultat.
-        result: Result<ProgressMap, RepositoryError>,
+        /// Tentatives, dans l'ordre chronologique.
+        result: Result<Vec<AttemptRecord>, RepositoryError>,
     },
-    /// Tentative enregistrée : progression à jour de l'exercice.
+    /// Tentative enregistrée.
     AttemptRecorded {
         /// Profil concerné.
         profile: ProfileId,
-        /// Résultat.
-        result: Result<(ContentId, ExerciseProgress), RepositoryError>,
+        /// Tentative datée.
+        result: Result<AttemptRecord, RepositoryError>,
     },
 }
 
@@ -134,7 +134,7 @@ pub async fn execute(effect: Effect, services: &Services) -> AppEvent {
         }
         Effect::LoadProgress(profile) => AppEvent::ProgressLoaded {
             profile,
-            result: services.exercises.progress(profile).await,
+            result: services.exercises.attempts(profile).await,
         },
         Effect::RecordAttempt {
             profile,

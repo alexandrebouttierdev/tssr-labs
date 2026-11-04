@@ -16,12 +16,15 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
-use tssrlabs_application::exercises::ProgressMap;
+use std::collections::HashMap;
 use tssrlabs_application::profiles::{ProfileError, ProfilesSnapshot};
-use tssrlabs_domain::content::Catalog;
+
+use tssrlabs_domain::content::{Catalog, ContentId};
+use tssrlabs_domain::exercise::ExerciseProgress;
 use tssrlabs_domain::host::HostInfo;
 use tssrlabs_domain::preferences::Preferences;
 use tssrlabs_domain::profile::{Profile, ProfileName, ProfileNameError};
+use tssrlabs_domain::progression::{AttemptRecord, Report};
 
 use crate::effects::{AppEvent, Effect, ProfileOp};
 use crate::i18n::{Language, Localizer, msg};
@@ -58,6 +61,8 @@ pub enum Screen {
     Paths,
     /// Bibliothèque (exploration libre).
     Library,
+    /// Progression : niveau, compétences, historique.
+    Progression,
     /// Gestion des profils.
     Profiles,
     /// Diagnostic de l'hôte.
@@ -70,10 +75,11 @@ pub enum Screen {
 
 impl Screen {
     /// Ordre de navigation.
-    pub const ALL: [Self; 5] = [
+    pub const ALL: [Self; 6] = [
         Self::Home,
         Self::Paths,
         Self::Library,
+        Self::Progression,
         Self::Profiles,
         Self::Diagnostic,
     ];
@@ -90,6 +96,7 @@ impl Screen {
             Self::Home => msg::SCREEN_HOME,
             Self::Paths => msg::SCREEN_PATHS,
             Self::Library => msg::SCREEN_LIBRARY,
+            Self::Progression => msg::SCREEN_PROGRESSION,
             Self::Profiles => msg::SCREEN_PROFILES,
             Self::Diagnostic => msg::SCREEN_DIAGNOSTIC,
             Self::Reader => msg::SCREEN_READER,
@@ -172,7 +179,11 @@ pub struct App {
     paths_row: usize,
     reader: Option<learning::ReaderState>,
     exercise: Option<exercise::ExerciseState>,
-    progress: ProgressMap,
+    /// Tentatives du profil actif (ordre chronologique).
+    attempts: Vec<AttemptRecord>,
+    progression_row: usize,
+    /// Bilan calculé à partir des tentatives.
+    report: Report,
     env: Environment,
     keymap: Keymap,
     i18n: Localizer,
@@ -197,7 +208,9 @@ impl App {
             paths_row: 0,
             reader: None,
             exercise: None,
-            progress: ProgressMap::new(),
+            attempts: Vec::new(),
+            progression_row: 0,
+            report: Report::default(),
             env,
             keymap: Keymap::default(),
             i18n: Localizer::new(Language::default()),
@@ -260,8 +273,31 @@ impl App {
     }
 
     /// Progression du profil actif, par exercice.
-    pub fn progress(&self) -> &ProgressMap {
-        &self.progress
+    pub fn progress(&self) -> &HashMap<ContentId, ExerciseProgress> {
+        &self.report.exercises
+    }
+
+    /// Bilan de progression du profil actif.
+    pub fn report(&self) -> &Report {
+        &self.report
+    }
+
+    /// Ligne sélectionnée dans l'historique de progression.
+    pub fn progression_row(&self) -> usize {
+        self.progression_row
+    }
+
+    /// Tentatives du profil actif, dans l'ordre chronologique.
+    pub fn attempts(&self) -> &[AttemptRecord] {
+        &self.attempts
+    }
+
+    fn set_attempts(&mut self, attempts: Vec<AttemptRecord>) {
+        self.attempts = attempts;
+        self.progression_row = self
+            .progression_row
+            .min(self.attempts.len().saturating_sub(1));
+        self.report = Report::compute(&self.catalog, &self.attempts);
     }
 
     /// Contexte d'exécution.
@@ -424,6 +460,7 @@ impl App {
     fn move_selection(&mut self, down: bool) {
         let (row, count) = match self.screen {
             Screen::Diagnostic => (&mut self.diagnostic_row, diagnostic::ROW_COUNT),
+            Screen::Progression => (&mut self.progression_row, self.attempts.len()),
             Screen::Profiles => (
                 &mut self.profile_row,
                 self.profiles.as_ref().map_or(0, |s| s.profiles.len()),
@@ -569,7 +606,7 @@ impl App {
                     return;
                 }
                 match result {
-                    Ok(progress) => self.progress = progress,
+                    Ok(attempts) => self.set_attempts(attempts),
                     Err(error) => {
                         self.notice =
                             Some(Notice::Error(self.i18n.t_args(
@@ -580,9 +617,11 @@ impl App {
                 }
             }
             AppEvent::AttemptRecorded { profile, result } => match result {
-                Ok((exercise, progress)) => {
+                Ok(attempt) => {
                     if self.active_profile().map(|p| p.id) == Some(profile) {
-                        self.progress.insert(exercise, progress);
+                        let mut attempts = std::mem::take(&mut self.attempts);
+                        attempts.push(attempt);
+                        self.set_attempts(attempts);
                     }
                 }
                 Err(error) => {
@@ -672,7 +711,7 @@ impl App {
         // Changement de profil actif : la progression affichée est la sienne.
         let new_active = snapshot.active.as_ref().map(|a| a.profile.id);
         if new_active != self.active_profile().map(|p| p.id) {
-            self.progress.clear();
+            self.set_attempts(Vec::new());
             if let Some(id) = new_active {
                 self.effects.push(Effect::LoadProgress(id));
             }
@@ -1190,7 +1229,7 @@ pub(crate) mod tests {
     fn tab_order_includes_content_screens() {
         let mut app = loaded_app(&["Alice"], Some(0));
         let mut seen = vec![app.screen()];
-        for _ in 0..4 {
+        for _ in 1..Screen::ALL.len() {
             send(&mut app, KeyCode::Tab);
             seen.push(app.screen());
         }
@@ -1241,14 +1280,13 @@ pub(crate) mod tests {
     fn opening_and_closing_a_chapter_returns_to_origin() {
         let mut app = loaded_app(&["Alice"], Some(0));
         go_to(&mut app, Screen::Paths);
-        send(&mut app, KeyCode::Down);
         send(&mut app, KeyCode::Enter);
         assert_eq!(app.screen(), Screen::Reader);
-        assert_eq!(app.reader().unwrap().chapter.as_str(), "permissions");
+        assert_eq!(app.reader().unwrap().chapter.as_str(), "terminal");
         send(&mut app, KeyCode::Esc);
         assert_eq!(app.screen(), Screen::Paths);
         assert!(app.reader().is_none());
-        assert_eq!(app.paths_row(), 1, "sélection conservée");
+        assert_eq!(app.paths_row(), 0, "sélection conservée");
     }
 
     #[test]
@@ -1272,7 +1310,7 @@ pub(crate) mod tests {
         send(&mut app, KeyCode::Tab);
         assert_eq!(
             app.screen(),
-            Screen::Profiles,
+            Screen::Progression,
             "Tab quitte la lecture vers l'écran suivant"
         );
     }
@@ -1280,7 +1318,8 @@ pub(crate) mod tests {
     // --- Exercices ---------------------------------------------------------
 
     use super::exercise_types::AttemptStatus as AttemptStatusAlias;
-    use tssrlabs_domain::exercise::{ExerciseProgress, Outcome};
+    use jiff::Timestamp as AttemptTime;
+    use tssrlabs_domain::exercise::Outcome;
 
     fn open_terminal_exercises(app: &mut App) {
         go_to(app, Screen::Library);
@@ -1420,38 +1459,104 @@ pub(crate) mod tests {
         assert!(app.reader().is_some());
         send(&mut app, KeyCode::Char('e'));
         send(&mut app, KeyCode::Tab);
-        assert_eq!(app.screen(), Screen::Profiles);
+        assert_eq!(app.screen(), Screen::Progression);
         assert!(app.reader().is_none() && app.exercise_state().is_none());
+    }
+
+    pub(crate) fn attempt(
+        exercise: &str,
+        outcome: Outcome,
+        hints: u8,
+        second: i64,
+    ) -> AttemptRecord {
+        AttemptRecord {
+            exercise: tssrlabs_domain::content::ContentId::parse(exercise).unwrap(),
+            outcome,
+            hints_used: hints,
+            at: AttemptTime::from_second(1_762_000_000 + second).unwrap(),
+        }
     }
 
     #[test]
     fn progress_events_apply_to_active_profile_only() {
         let mut app = loaded_app(&["Alice"], Some(0));
-        let solved = ExerciseProgress {
-            attempts: 1,
-            solved: true,
-            revealed: false,
-            fewest_hints: Some(0),
-        };
-        let mut other = tssrlabs_application::exercises::ProgressMap::new();
-        other.insert(
-            tssrlabs_domain::content::ContentId::parse("ex-cd").unwrap(),
-            solved,
-        );
+        let attempts = vec![attempt("ex-cd", Outcome::Correct, 0, 1)];
         app.handle_app_event(AppEvent::ProgressLoaded {
             profile: ProfileId::new(99),
-            result: Ok(other.clone()),
+            result: Ok(attempts.clone()),
         });
-        assert!(app.progress().is_empty());
+        assert!(app.attempts().is_empty());
         app.handle_app_event(AppEvent::ProgressLoaded {
             profile: ProfileId::new(1),
-            result: Ok(other),
+            result: Ok(attempts),
         });
         assert_eq!(app.progress().len(), 1);
+        // Débutant, du premier coup, sans indice : 10 + 5 + 2.
+        assert_eq!(app.report().total_xp, 17);
+
+        app.handle_app_event(AppEvent::AttemptRecorded {
+            profile: ProfileId::new(1),
+            result: Ok(attempt("ex-qcm", Outcome::Correct, 1, 2)),
+        });
+        assert_eq!(app.attempts().len(), 2);
+        assert_eq!(app.report().total_xp, 17 + 12);
+
         app.handle_app_event(AppEvent::AttemptRecorded {
             profile: ProfileId::new(1),
             result: Err(RepositoryError::NotFound),
         });
         assert!(matches!(app.notice(), Some(Notice::Error(t)) if t.contains("non enregistrée")));
+    }
+
+    #[test]
+    fn locked_chapters_do_not_open_from_paths_until_prerequisites_are_done() {
+        let mut app = loaded_app(&["Alice"], Some(0));
+        go_to(&mut app, Screen::Paths);
+        send(&mut app, KeyCode::Down);
+        send(&mut app, KeyCode::Enter);
+        assert_eq!(app.screen(), Screen::Paths);
+        assert!(
+            matches!(app.notice(), Some(Notice::Info(t)) if t.contains("verrouillé") && t.contains("Le terminal"))
+        );
+
+        // Exercices du premier chapitre terminés (dont un avec solution affichée).
+        app.handle_app_event(AppEvent::ProgressLoaded {
+            profile: ProfileId::new(1),
+            result: Ok(vec![
+                attempt("ex-qcm", Outcome::Correct, 0, 1),
+                attempt("ex-cd", Outcome::Revealed, 0, 2),
+            ]),
+        });
+        send(&mut app, KeyCode::Enter);
+        assert_eq!(app.screen(), Screen::Reader);
+        assert_eq!(app.reader().unwrap().chapter.as_str(), "permissions");
+    }
+
+    #[test]
+    fn enter_on_dashboard_opens_recommended_chapter() {
+        let mut app = loaded_app(&["Alice"], Some(0));
+        assert_eq!(app.screen(), Screen::Home);
+        send(&mut app, KeyCode::Enter);
+        assert_eq!(app.screen(), Screen::Reader);
+        assert_eq!(app.reader().unwrap().chapter.as_str(), "terminal");
+        send(&mut app, KeyCode::Esc);
+        assert_eq!(app.screen(), Screen::Home);
+    }
+
+    #[test]
+    fn history_selection_follows_attempts() {
+        let mut app = loaded_app(&["Alice"], Some(0));
+        app.handle_app_event(AppEvent::ProgressLoaded {
+            profile: ProfileId::new(1),
+            result: Ok(vec![
+                attempt("ex-cd", Outcome::Incorrect, 0, 1),
+                attempt("ex-cd", Outcome::Correct, 0, 2),
+            ]),
+        });
+        go_to(&mut app, Screen::Progression);
+        for _ in 0..5 {
+            send(&mut app, KeyCode::Down);
+        }
+        assert_eq!(app.progression_row(), 1);
     }
 }

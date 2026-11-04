@@ -19,6 +19,33 @@ pub fn sanitize(text: &str) -> String {
     out
 }
 
+/// Raccourcit `text` à `max_width` colonnes en terminant par « … ».
+pub fn ellipsize_end(text: &str, max_width: usize) -> String {
+    if text.width() <= max_width {
+        return text.to_owned();
+    }
+    let mut out = String::new();
+    let mut used = 0;
+    for c in text.chars() {
+        let w = c.width().unwrap_or(0);
+        if used + w + 1 > max_width {
+            break;
+        }
+        out.push(c);
+        used += w;
+    }
+    if max_width > 0 {
+        out.push('…');
+    }
+    out
+}
+
+/// Barre de progression textuelle (lisible sans couleur) : `█████░░░░░`.
+pub fn bar(percent: u32, width: usize) -> String {
+    let filled = (usize::try_from(percent.min(100)).unwrap_or(100) * width + 50) / 100;
+    format!("{}{}", "█".repeat(filled), "░".repeat(width - filled))
+}
+
 /// Date et heure dans le fuseau du système (« 03/11/2026 15:42 »).
 pub fn format_local(timestamp: Timestamp) -> String {
     format_in(timestamp, &TimeZone::system())
@@ -75,6 +102,24 @@ pub fn ellipsize_middle(text: &str, max_width: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn ellipsize_end_keeps_the_beginning() {
+        assert_eq!(
+            ellipsize_end("Utiliser le shell Bash", 30),
+            "Utiliser le shell Bash"
+        );
+        assert_eq!(ellipsize_end("Utiliser le shell Bash", 10), "Utiliser …");
+        assert_eq!(ellipsize_end("abc", 0), "");
+    }
+
+    #[test]
+    fn bar_is_proportional_and_bounded() {
+        assert_eq!(bar(0, 10), "░░░░░░░░░░");
+        assert_eq!(bar(40, 10), "████░░░░░░");
+        assert_eq!(bar(100, 4), "████");
+        assert_eq!(bar(250, 4), "████");
+    }
 
     #[test]
     fn sanitize_neutralizes_escape_sequences() {

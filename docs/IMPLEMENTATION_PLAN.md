@@ -77,7 +77,8 @@ Les textes de l'interface sont dans `crates/tssrlabs-tui/i18n/<langue>/*.ftl`
 | 2 | SQLite (thread dédié, migration v1), profils (créer/choisir/renommer/supprimer avec confirmation), préférences | Livrable phase 0 | **Terminée** |
 | 3 | Contenu : cours, chapitres, parcours, compétences ; Markdown + JSON ; parcours d'exemple « Linux — les bases » ; bibliothèque, filtres, recherche ; validation du contenu embarqué | Lecture hors ligne | **Terminée** |
 | 4 | Exercices guidés : QCM, compléter, analyser une sortie, rédiger une commande (comparaison textuelle signalée) ; indices, tentatives | Faire un exercice | **Terminée** |
-| 5 | XP (domaine pur), niveaux, maîtrise, historique ; dashboard réel ; favoris, « À reprendre », notes ; parcours et déblocage | Livrable phase 1 | À faire |
+| 5a | XP (domaine pur), niveaux, maîtrise, historique, série d'activité ; dashboard réel ; parcours et déblocage | Progression visible | **Terminée** |
+| 5b | Favoris, « À reprendre », notes personnelles | Livrable phase 1 | À faire |
 | 6 | Schéma de scénario v1, import/export `.tssrlab` sécurisé, rapport de validation sans exécution | Import/export + tests sécurité | À faire |
 | 7 | Détection Docker/Podman (socket, contexte, rootless, options de sécurité, cgroups), écran des capacités, job CI Docker | Diagnostic moteur | À faire |
 | 8 | Premier labo Debian persistant et durci, scripts copiés et exécutés en argv, cycle de vie complet, nettoyage des orphelins | Cycle de vie labo | À faire |
@@ -332,3 +333,48 @@ Limites connues :
   enregistrée pour être exploitée ensuite.
 - Sur un petit terminal, la fin d'un exercice long (explication, indices)
   peut être coupée ; pas de défilement dans l'écran d'exercice.
+
+### Tranche 5a — Progression (terminée)
+
+- Domaine `progression` : tout est **calculé** à partir de la liste
+  ordonnée des tentatives (aucune donnée dupliquée, règles modifiables en
+  un seul endroit) :
+  - XP : 10 / 20 / 30 selon le niveau du chapitre, accordé une seule fois
+    (première réussite), +50 % sans indice, +25 % du premier coup, rien si
+    la solution a été affichée avant la réussite, aucun XP retiré ;
+  - niveaux : seuils 0, 100, 300, 600, 1000… (le niveau n demande n × 100 XP
+    de plus que le précédent) ;
+  - maîtrise par compétence, indépendante du niveau global : part des
+    exercices réussis (sans solution vue avant) parmi ceux des chapitres
+    qui travaillent la compétence ; non commencée, découverte (< 40 %),
+    en progrès (< 80 %), maîtrisée ;
+  - chapitres : verrouillé tant qu'un prérequis n'est pas terminé,
+    disponible, terminé (tous ses exercices réussis ou solution vue) ;
+    chapitre recommandé = premier chapitre disponible des parcours ;
+  - série d'activité : jours consécutifs avec au moins une tentative,
+    dans le fuseau de l'apprenant.
+- Stockage : le dépôt renvoie les tentatives datées et ordonnées (pas de
+  nouvelle migration).
+- Interface :
+  - **tableau de bord réel** : niveau et barre d'XP, exercices réussis,
+    série, chapitre recommandé (Entrée l'ouvre), compétences, activité
+    récente avec l'XP gagné ;
+  - nouvel onglet **Progression** : bilan, maîtrise détaillée, rappel des
+    règles d'XP, historique complet ;
+  - **parcours** : état de chaque chapitre en texte ; un chapitre verrouillé
+    ne s'ouvre pas depuis un parcours (message explicatif), la Bibliothèque
+    reste en accès libre ;
+  - exercice : XP obtenu affiché ;
+  - messages repliés sur trois lignes au plus au lieu d'être tronqués ;
+    en mode compact, l'en-tête n'affiche que l'écran courant et sa position.
+- Vérifié dans un vrai pseudo-terminal sur une base réelle : 66 XP
+  attendus et obtenus pour les 5 tentatives enregistrées, états des
+  chapitres, verrouillage, recommandation, affichage compact.
+
+Limites connues :
+- Un chapitre sans exercice est considéré comme terminé (la lecture n'est
+  pas encore suivie) : il ne bloque pas un parcours.
+- Pas de succès/trophées ni d'objectifs quotidiens/hebdomadaires pour
+  l'instant.
+- En mode compact, l'activité récente du tableau de bord peut être coupée ;
+  elle reste consultable dans l'onglet Progression.

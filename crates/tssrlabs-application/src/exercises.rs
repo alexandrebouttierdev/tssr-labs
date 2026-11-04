@@ -1,20 +1,18 @@
-//! Cas d'utilisation : tentatives d'exercices et progression.
+//! Cas d'utilisation : tentatives d'exercices.
 //!
-//! La vérification d'une réponse est une règle du domaine
-//! ([`tssrlabs_domain::exercise::Exercise::check`]) ; ce service enregistre
-//! les tentatives d'un profil et restitue sa progression.
+//! La vérification d'une réponse et le calcul de la progression (XP,
+//! niveaux, maîtrise) sont des règles du domaine
+//! ([`tssrlabs_domain::exercise`], [`tssrlabs_domain::progression`]) ; ce
+//! service enregistre les tentatives d'un profil et les restitue.
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use tssrlabs_domain::content::ContentId;
-use tssrlabs_domain::exercise::{ExerciseProgress, Outcome};
+use tssrlabs_domain::exercise::Outcome;
 use tssrlabs_domain::profile::ProfileId;
+use tssrlabs_domain::progression::AttemptRecord;
 
 use crate::ports::{AttemptRepository, RepositoryError};
-
-/// Progression d'un profil, par exercice.
-pub type ProgressMap = HashMap<ContentId, ExerciseProgress>;
 
 /// Service des exercices.
 #[derive(Debug, Clone)]
@@ -28,29 +26,24 @@ impl ExerciseService {
         Self { attempts }
     }
 
-    /// Enregistre une tentative et renvoie la progression à jour de
-    /// l'exercice.
+    /// Enregistre une tentative et la renvoie datée.
     pub async fn record(
         &self,
         profile: ProfileId,
         exercise: ContentId,
         outcome: Outcome,
         hints_used: u8,
-    ) -> Result<(ContentId, ExerciseProgress), RepositoryError> {
+    ) -> Result<AttemptRecord, RepositoryError> {
         self.attempts
-            .record(profile, exercise.clone(), outcome, hints_used)
-            .await?;
-        let progress = self
-            .attempts
-            .progress(profile)
-            .await?
-            .remove(&exercise)
-            .unwrap_or_default();
-        Ok((exercise, progress))
+            .record(profile, exercise, outcome, hints_used)
+            .await
     }
 
-    /// Progression complète d'un profil.
-    pub async fn progress(&self, profile: ProfileId) -> Result<ProgressMap, RepositoryError> {
-        self.attempts.progress(profile).await
+    /// Tentatives d'un profil, dans l'ordre chronologique.
+    pub async fn attempts(
+        &self,
+        profile: ProfileId,
+    ) -> Result<Vec<AttemptRecord>, RepositoryError> {
+        self.attempts.attempts(profile).await
     }
 }

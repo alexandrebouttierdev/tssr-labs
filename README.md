@@ -39,7 +39,7 @@ Ce dépôt contient le cadrage initial, les décisions produit et techniques, un
 
 ## Développement
 
-État actuel : **tranche 4 (exercices guidés)** — profils et préférences, parcours guidés, bibliothèque, lecteur de chapitres et 12 exercices (QCM, commandes à compléter ou à rédiger, analyse de sortie) avec indices, solutions et suivi des tentatives par profil.
+État actuel : **tranche 5a (progression)** — profils, parcours avec déblocage par prérequis, bibliothèque, lecteur de chapitres, 12 exercices guidés, XP, niveaux, maîtrise des compétences, historique et tableau de bord réel.
 
 Prérequis : [rustup](https://rustup.rs). La toolchain est épinglée dans `rust-toolchain.toml` et installée automatiquement.
 

@@ -316,5 +316,18 @@ fn feedback(
         }
         None => i18n.t(msg::EXERCISE_NOT_RECORDED),
     };
-    flow.line(Line::styled(progress, theme.muted));
+    let xp = if app.active_profile().is_some()
+        && app.progress().get(&exercise.id).is_some_and(|p| p.solved)
+    {
+        match app.report().awards.get(&exercise.id) {
+            Some(award) => format!(
+                " · {}",
+                i18n.t_args(msg::EXERCISE_XP, &[("xp", award.total().into())])
+            ),
+            None => format!(" · {}", i18n.t(msg::EXERCISE_NO_XP)),
+        }
+    } else {
+        String::new()
+    };
+    flow.line(Line::styled(format!("{progress}{xp}"), theme.muted));
 }

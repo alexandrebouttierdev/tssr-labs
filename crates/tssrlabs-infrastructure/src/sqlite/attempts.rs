@@ -3,11 +3,11 @@
 use futures_util::future::BoxFuture;
 use jiff::Timestamp;
 use rusqlite::{ErrorCode, params};
-use tssrlabs_application::exercises::ProgressMap;
 use tssrlabs_application::ports::{AttemptRepository, RepoResult, RepositoryError};
 use tssrlabs_domain::content::ContentId;
 use tssrlabs_domain::exercise::Outcome;
 use tssrlabs_domain::profile::ProfileId;
+use tssrlabs_domain::progression::AttemptRecord;
 
 use super::{Database, DbError};
 
@@ -47,10 +47,11 @@ impl AttemptRepository for SqliteAttemptRepository {
         exercise: ContentId,
         outcome: Outcome,
         hints_used: u8,
-    ) -> BoxFuture<'_, RepoResult<()>> {
+    ) -> BoxFuture<'_, RepoResult<AttemptRecord>> {
         Box::pin(async move {
             self.db
                 .call(move |conn| {
+                    let at = Timestamp::now();
                     conn.execute(
                         "INSERT INTO exercise_attempts
                              (profile_id, exercise_id, outcome, hints_used, answered_at)
@@ -60,22 +61,28 @@ impl AttemptRepository for SqliteAttemptRepository {
                             exercise.as_str(),
                             outcome.as_str(),
                             hints_used,
-                            Timestamp::now().as_millisecond()
+                            at.as_millisecond()
                         ],
                     )?;
-                    Ok(())
+                    Ok(AttemptRecord {
+                        exercise,
+                        outcome,
+                        hints_used,
+                        // Même précision que la valeur stockée.
+                        at: Timestamp::from_millisecond(at.as_millisecond()).unwrap_or(at),
+                    })
                 })
                 .await
                 .map_err(to_repository_error)
         })
     }
 
-    fn progress(&self, profile: ProfileId) -> BoxFuture<'_, RepoResult<ProgressMap>> {
+    fn attempts(&self, profile: ProfileId) -> BoxFuture<'_, RepoResult<Vec<AttemptRecord>>> {
         Box::pin(async move {
             self.db
                 .call(move |conn| {
                     let mut stmt = conn.prepare_cached(
-                        "SELECT exercise_id, outcome, hints_used FROM exercise_attempts
+                        "SELECT exercise_id, outcome, hints_used, answered_at FROM exercise_attempts
                          WHERE profile_id = ?1 ORDER BY id",
                     )?;
                     let rows = stmt.query_map([profile.get()], |row| {
@@ -83,23 +90,30 @@ impl AttemptRepository for SqliteAttemptRepository {
                             row.get::<_, String>(0)?,
                             row.get::<_, String>(1)?,
                             row.get::<_, i64>(2)?,
+                            row.get::<_, i64>(3)?,
                         ))
                     })?;
-                    let mut progress = ProgressMap::new();
+                    let mut attempts = Vec::new();
                     for row in rows {
-                        let (exercise, outcome, hints) = row?;
-                        // Une ligne illisible (contenu retiré, valeur inconnue)
+                        let (exercise, outcome, hints, at) = row?;
+                        // Une ligne illisible (valeur inconnue, date invalide)
                         // est ignorée plutôt que de bloquer toute la progression.
-                        let (Some(exercise), Some(outcome)) =
-                            (ContentId::parse(&exercise), Outcome::parse(&outcome))
-                        else {
+                        let (Some(exercise), Some(outcome), Ok(at)) = (
+                            ContentId::parse(&exercise),
+                            Outcome::parse(&outcome),
+                            Timestamp::from_millisecond(at),
+                        ) else {
                             tracing::warn!(%exercise, %outcome, "tentative illisible ignorée");
                             continue;
                         };
-                        let hints = u8::try_from(hints).unwrap_or(u8::MAX);
-                        progress.entry(exercise).or_default().record(outcome, hints);
+                        attempts.push(AttemptRecord {
+                            exercise,
+                            outcome,
+                            hints_used: u8::try_from(hints).unwrap_or(u8::MAX),
+                            at,
+                        });
                     }
-                    Ok(progress)
+                    Ok(attempts)
                 })
                 .await
                 .map_err(to_repository_error)
@@ -113,7 +127,6 @@ mod tests {
     use crate::sqlite::open;
     use crate::sqlite::profiles::SqliteProfileRepository;
     use tssrlabs_application::ports::ProfileRepository;
-    use tssrlabs_domain::exercise::ExerciseProgress;
     use tssrlabs_domain::profile::ProfileName;
 
     fn id(v: &str) -> ContentId {
@@ -121,7 +134,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn attempts_build_progress_per_profile() {
+    async fn attempts_are_returned_in_order_per_profile() {
         let tmp = tempfile::tempdir().unwrap();
         let (db, _thread) = open(&tmp.path().join("db"), tmp.path()).unwrap();
         let profiles = SqliteProfileRepository::new(db.clone());
@@ -135,7 +148,8 @@ mod tests {
             .unwrap();
         let repo = SqliteAttemptRepository::new(db);
 
-        repo.record(alice.id, id("ex-a"), Outcome::Incorrect, 0)
+        let first = repo
+            .record(alice.id, id("ex-a"), Outcome::Incorrect, 0)
             .await
             .unwrap();
         repo.record(alice.id, id("ex-a"), Outcome::Correct, 1)
@@ -148,18 +162,22 @@ mod tests {
             .await
             .unwrap();
 
-        let progress = repo.progress(alice.id).await.unwrap();
+        let attempts = repo.attempts(alice.id).await.unwrap();
+        assert_eq!(attempts.len(), 3);
+        assert_eq!(attempts[0], first, "date relue identique à celle renvoyée");
+        let outcomes: Vec<_> = attempts
+            .iter()
+            .map(|a| (a.exercise.as_str(), a.outcome, a.hints_used))
+            .collect();
         assert_eq!(
-            progress[&id("ex-a")],
-            ExerciseProgress {
-                attempts: 2,
-                solved: true,
-                revealed: false,
-                fewest_hints: Some(1)
-            }
+            outcomes,
+            vec![
+                ("ex-a", Outcome::Incorrect, 0),
+                ("ex-a", Outcome::Correct, 1),
+                ("ex-b", Outcome::Revealed, 2)
+            ]
         );
-        assert!(progress[&id("ex-b")].revealed);
-        assert_eq!(repo.progress(bob.id).await.unwrap().len(), 1);
+        assert_eq!(repo.attempts(bob.id).await.unwrap().len(), 1);
     }
 
     #[tokio::test]
@@ -177,9 +195,11 @@ mod tests {
             .unwrap();
 
         profiles.delete(alice.id).await.unwrap();
-        assert!(repo.progress(alice.id).await.unwrap().is_empty());
+        assert!(repo.attempts(alice.id).await.unwrap().is_empty());
         assert_eq!(
-            repo.record(alice.id, id("ex-a"), Outcome::Correct, 0).await,
+            repo.record(alice.id, id("ex-a"), Outcome::Correct, 0)
+                .await
+                .map(|_| ()),
             Err(RepositoryError::NotFound)
         );
     }

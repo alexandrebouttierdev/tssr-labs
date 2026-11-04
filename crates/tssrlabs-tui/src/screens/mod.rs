@@ -6,6 +6,7 @@ pub mod home;
 pub mod library;
 pub mod paths;
 pub mod profiles;
+pub mod progression;
 pub mod reader;
 
 use tssrlabs_domain::content::{Difficulty, Domain};

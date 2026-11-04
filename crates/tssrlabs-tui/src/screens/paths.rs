@@ -1,13 +1,15 @@
 //! Parcours guidés : chapitres dans l'ordre recommandé.
 //!
-//! Le suivi de progression et le déblocage arriveront avec la progression
-//! (XP, compétences) ; l'écran présente pour l'instant l'ordre et les
-//! prérequis.
+//! Chaque chapitre indique son état : verrouillé tant qu'un prérequis n'est
+//! pas terminé, disponible, ou terminé (tous ses exercices faits).
 
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{HighlightSpacing, Paragraph, Row, Table, TableState, Wrap};
+
+use tssrlabs_domain::content::Chapter;
+use tssrlabs_domain::progression::ChapterStatus;
 
 use crate::app::App;
 use crate::i18n::msg;
@@ -17,9 +19,20 @@ use crate::theme::Theme;
 
 const HIGHLIGHT: &str = "› ";
 
+/// État du chapitre, en texte (verrouillé, disponible, terminé).
+fn status_line(app: &App, theme: &Theme, chapter: &Chapter) -> Line<'static> {
+    let (id, style) = match app.report().chapter_status(app.catalog(), chapter) {
+        ChapterStatus::Locked { .. } => (msg::PATHS_STATUS_LOCKED, theme.muted),
+        ChapterStatus::Available => (msg::PATHS_STATUS_AVAILABLE, theme.accent),
+        ChapterStatus::Completed => (msg::PATHS_STATUS_COMPLETED, theme.success),
+    };
+    Line::styled(app.i18n().t(id), style)
+}
+
 /// Dessine les parcours.
 pub fn render(app: &App, theme: &Theme, mode: LayoutMode, frame: &mut Frame, area: Rect) {
     let i18n = app.i18n();
+    let full = mode == LayoutMode::Full;
     let catalog = app.catalog();
     if catalog.paths().is_empty() {
         frame.render_widget(
@@ -52,6 +65,7 @@ pub fn render(app: &App, theme: &Theme, mode: LayoutMode, frame: &mut Frame, are
         }
         rows.push(Row::new(vec![
             Line::styled(path.title.clone(), theme.title),
+            Line::from(""),
             Line::styled(summary, theme.muted),
             Line::styled(total, theme.muted),
         ]));
@@ -62,7 +76,15 @@ pub fn render(app: &App, theme: &Theme, mode: LayoutMode, frame: &mut Frame, are
                     Span::styled(format!("  {}. ", index + 1), theme.accent),
                     Span::styled(chapter.title.clone(), theme.base),
                 ]),
-                Line::styled(i18n.t(difficulty_label_id(chapter.difficulty)), theme.muted),
+                status_line(app, theme, chapter),
+                Line::styled(
+                    if full {
+                        i18n.t(difficulty_label_id(chapter.difficulty))
+                    } else {
+                        String::new()
+                    },
+                    theme.muted,
+                ),
                 Line::styled(
                     i18n.t_args(
                         msg::MINUTES,
@@ -78,7 +100,8 @@ pub fn render(app: &App, theme: &Theme, mode: LayoutMode, frame: &mut Frame, are
         rows,
         [
             Constraint::Fill(1),
-            Constraint::Length(14),
+            Constraint::Length(11),
+            Constraint::Length(if full { 14 } else { 0 }),
             Constraint::Length(8),
         ],
     )

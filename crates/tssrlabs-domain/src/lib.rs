@@ -9,3 +9,4 @@ pub mod exercise;
 pub mod host;
 pub mod preferences;
 pub mod profile;
+pub mod progression;

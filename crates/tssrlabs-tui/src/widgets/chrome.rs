@@ -4,7 +4,7 @@
 use ratatui::Frame;
 use ratatui::layout::{Alignment, Rect};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Paragraph};
+use ratatui::widgets::{Block, Paragraph, Wrap};
 
 use crate::app::{App, Notice, Screen};
 use crate::i18n::msg;
@@ -22,14 +22,36 @@ pub fn header(app: &App, theme: &Theme, mode: LayoutMode, frame: &mut Frame, are
         format!(" {} ", i18n.t(msg::APP_TITLE)),
         theme.accent,
     )];
-    for screen in Screen::ALL {
+    let compact = mode != LayoutMode::Full;
+    if compact {
+        // Pas la place pour tous les onglets : écran courant et position.
+        let current = if app.screen() == Screen::Reader || app.screen() == Screen::Exercise {
+            app.reader().map_or(Screen::Library, |r| r.return_to)
+        } else {
+            app.screen()
+        };
+        let index = Screen::ALL.iter().position(|s| *s == current).unwrap_or(0);
+        spans.push(Span::raw("   "));
+        spans.push(Span::styled(
+            i18n.t_args(
+                msg::HEADER_COMPACT,
+                &[
+                    ("screen", i18n.t(app.screen().title_id()).into()),
+                    ("index", (index + 1).into()),
+                    ("total", Screen::ALL.len().into()),
+                ],
+            ),
+            theme.tab_active,
+        ));
+    }
+    for screen in Screen::ALL.into_iter().filter(|_| !compact) {
         let style = if screen == app.screen() {
             theme.tab_active
         } else {
             theme.muted
         };
         // Espaces hors du style : le soulignement ne couvre que le nom.
-        spans.push(Span::raw("   "));
+        spans.push(Span::raw("  "));
         spans.push(Span::styled(i18n.t(screen.title_id()), style));
     }
     let tabs = Line::from(spans);
@@ -65,25 +87,44 @@ pub fn header(app: &App, theme: &Theme, mode: LayoutMode, frame: &mut Frame, are
     );
 }
 
-/// Ligne de message (information ou erreur), avec préfixe textuel.
-pub fn notice(app: &App, theme: &Theme, frame: &mut Frame, area: Rect) {
+/// Hauteur maximale de la zone de message.
+pub const NOTICE_MAX_LINES: u16 = 3;
+
+/// Message (information ou erreur) avec préfixe textuel, prêt à afficher.
+pub fn notice_paragraph(app: &App, theme: &Theme) -> Option<Paragraph<'static>> {
     let i18n = app.i18n();
-    let (text, style) = match app.notice() {
-        Some(Notice::Info(text)) => (
+    let (text, style) = match app.notice()? {
+        Notice::Info(text) => (
             i18n.t_args(msg::NOTICE_INFO, &[("text", text.clone().into())]),
             theme.success,
         ),
-        Some(Notice::Error(text)) => (
+        Notice::Error(text) => (
             i18n.t_args(msg::NOTICE_ERROR, &[("text", text.clone().into())]),
             theme.danger,
         ),
-        None => return,
     };
-    let text = ellipsize_middle(&text, usize::from(area.width).saturating_sub(2));
-    frame.render_widget(
-        Paragraph::new(Line::styled(format!(" {text}"), style)),
-        area,
-    );
+    Some(Paragraph::new(Line::styled(text, style)).wrap(Wrap { trim: true }))
+}
+
+/// Hauteur nécessaire au message pour une largeur donnée (0 sans message).
+pub fn notice_height(app: &App, theme: &Theme, width: u16) -> u16 {
+    notice_paragraph(app, theme).map_or(0, |p| {
+        u16::try_from(p.line_count(width.saturating_sub(2)))
+            .unwrap_or(NOTICE_MAX_LINES)
+            .clamp(1, NOTICE_MAX_LINES)
+    })
+}
+
+/// Zone de message : repliée plutôt que tronquée.
+pub fn notice(app: &App, theme: &Theme, frame: &mut Frame, area: Rect) {
+    if let Some(paragraph) = notice_paragraph(app, theme) {
+        let inner = Rect {
+            x: area.x + 1,
+            width: area.width.saturating_sub(2),
+            ..area
+        };
+        frame.render_widget(paragraph, inner);
+    }
 }
 
 /// Pied de page : raccourcis disponibles dans le contexte courant.
@@ -143,6 +184,13 @@ pub fn footer(app: &App, theme: &Theme, mode: LayoutMode, frame: &mut Frame, are
             Command::ClearFilters,
         ]),
         Screen::Paths => commands.push(Command::Activate),
+        Screen::Home
+            if app.active_profile().is_some()
+                && app.report().recommended(app.catalog()).is_some() =>
+        {
+            commands.push(Command::Activate);
+        }
+        Screen::Progression if full => commands.extend([Command::Up, Command::Down]),
         Screen::Reader => {
             commands.push(Command::Close);
             let has_exercises = app
@@ -189,7 +237,7 @@ pub fn footer(app: &App, theme: &Theme, mode: LayoutMode, frame: &mut Frame, are
 /// « Retour » depuis la lecture).
 pub fn command_label(app: &App, command: Command) -> String {
     let id = match (app.screen(), command) {
-        (Screen::Library | Screen::Paths, Command::Activate) => msg::CMD_OPEN,
+        (Screen::Library | Screen::Paths | Screen::Home, Command::Activate) => msg::CMD_OPEN,
         (Screen::Reader | Screen::Exercise, Command::Close) => msg::CMD_BACK,
         (Screen::Exercise, Command::Activate) => msg::CMD_VALIDATE,
         _ => command.label_id(),

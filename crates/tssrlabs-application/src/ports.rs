@@ -11,6 +11,7 @@ use tssrlabs_domain::content::ContentId;
 use tssrlabs_domain::exercise::Outcome;
 use tssrlabs_domain::preferences::Preferences;
 use tssrlabs_domain::profile::{Profile, ProfileId, ProfileName};
+use tssrlabs_domain::progression::AttemptRecord;
 
 /// Erreur d'un adaptateur de stockage.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -66,18 +67,15 @@ pub trait SafetyBackup: Send + Sync + std::fmt::Debug {
 
 /// Persistance des tentatives d'exercices.
 pub trait AttemptRepository: Send + Sync + std::fmt::Debug {
-    /// Enregistre une tentative ([`RepositoryError::NotFound`] si le profil
-    /// n'existe plus).
+    /// Enregistre une tentative et la renvoie datée
+    /// ([`RepositoryError::NotFound`] si le profil n'existe plus).
     fn record(
         &self,
         profile: ProfileId,
         exercise: ContentId,
         outcome: Outcome,
         hints_used: u8,
-    ) -> BoxFuture<'_, RepoResult<()>>;
-    /// Progression d'un profil, par exercice.
-    fn progress(
-        &self,
-        profile: ProfileId,
-    ) -> BoxFuture<'_, RepoResult<crate::exercises::ProgressMap>>;
+    ) -> BoxFuture<'_, RepoResult<AttemptRecord>>;
+    /// Tentatives d'un profil, dans l'ordre chronologique.
+    fn attempts(&self, profile: ProfileId) -> BoxFuture<'_, RepoResult<Vec<AttemptRecord>>>;
 }

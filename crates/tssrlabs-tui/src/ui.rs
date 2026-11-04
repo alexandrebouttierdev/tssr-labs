@@ -22,7 +22,7 @@ pub fn render(app: &App, frame: &mut Frame) {
         return;
     }
 
-    let notice_height = u16::from(app.notice().is_some());
+    let notice_height = widgets::chrome::notice_height(app, &theme, area.width);
     let [header, body, notice, footer] = Layout::vertical([
         Constraint::Length(1),
         Constraint::Min(0),
@@ -50,9 +50,10 @@ pub fn render(app: &App, frame: &mut Frame) {
     };
 
     match app.screen() {
-        Screen::Home => screens::home::render(app, &theme, frame, content),
+        Screen::Home => screens::home::render(app, &theme, mode, frame, content),
         Screen::Paths => screens::paths::render(app, &theme, mode, frame, content),
         Screen::Library => screens::library::render(app, &theme, mode, frame, content),
+        Screen::Progression => screens::progression::render(app, &theme, frame, content),
         Screen::Reader => screens::reader::render(app, &theme, frame, content),
         Screen::Exercise => screens::exercise::render(app, &theme, frame, content),
         Screen::Profiles => screens::profiles::render(app, &theme, mode, frame, content),
@@ -127,7 +128,7 @@ mod tests {
                 "Profils",
                 "Diagnostic",
                 "Bonjour, Alice",
-                "Aucune activité",
+                "Aucune tentative pour l'instant",
                 "Profil : Alice",
                 "Quitter",
             ],
@@ -430,28 +431,128 @@ mod tests {
         }
     }
 
+    fn with_attempts(app: &mut App, attempts: Vec<tssrlabs_domain::progression::AttemptRecord>) {
+        app.handle_app_event(crate::effects::AppEvent::ProgressLoaded {
+            profile: tssrlabs_domain::profile::ProfileId::new(1),
+            result: Ok(attempts),
+        });
+    }
+
     #[test]
-    fn dashboard_counts_solved_exercises() {
-        use crate::effects::AppEvent;
-        use tssrlabs_domain::exercise::ExerciseProgress;
-        use tssrlabs_domain::profile::ProfileId;
+    fn dashboard_shows_level_recommendation_skills_and_activity() {
+        use crate::app::tests::attempt;
+        use tssrlabs_domain::exercise::Outcome;
 
         let mut app = loaded_app(&["Alice"], Some(0));
-        assert_contains(&rendered(&app, 100, 30), &["Aucune activité enregistrée"]);
-        let mut progress = tssrlabs_application::exercises::ProgressMap::new();
-        progress.insert(
-            tssrlabs_domain::content::ContentId::parse("ex-cd").unwrap(),
-            ExerciseProgress {
-                attempts: 2,
-                solved: true,
-                revealed: false,
-                fewest_hints: Some(0),
-            },
+        assert_contains(
+            &rendered(&app, 100, 30),
+            &[
+                "Bonjour, Alice",
+                "Niveau 1 · 0 XP au total",
+                "0 / 100 XP vers le niveau 2",
+                "Recommandé : Le terminal",
+                "Entrée pour l'ouvrir",
+                "Compétences",
+                "non commencée",
+                "Aucune tentative pour l'instant.",
+                "Entrée Ouvrir",
+            ],
         );
-        app.handle_app_event(AppEvent::ProgressLoaded {
-            profile: ProfileId::new(1),
-            result: Ok(progress),
-        });
-        assert_contains(&rendered(&app, 100, 30), &["Exercices réussis : 1 sur 2."]);
+        with_attempts(
+            &mut app,
+            vec![
+                attempt("ex-cd", Outcome::Incorrect, 0, 1),
+                attempt("ex-cd", Outcome::Correct, 0, 2),
+            ],
+        );
+        assert_contains(
+            &rendered(&app, 100, 30),
+            &[
+                "Niveau 1 · 15 XP au total",
+                "Exercices réussis : 1 sur 2.",
+                "Revenir en arrière · réussi +15 XP",
+                "· échoué",
+                "50 % · en progrès",
+            ],
+        );
+    }
+
+    #[test]
+    fn progression_screen_lists_history_and_rules() {
+        use crate::app::tests::attempt;
+        use tssrlabs_domain::exercise::Outcome;
+
+        let mut app = loaded_app(&["Alice"], Some(0));
+        with_attempts(
+            &mut app,
+            vec![
+                attempt("ex-qcm", Outcome::Revealed, 1, 1),
+                attempt("ex-cd", Outcome::Correct, 2, 2),
+            ],
+        );
+        go_to(&mut app, Screen::Progression);
+        assert_contains(
+            &rendered(&app, 100, 30),
+            &[
+                "Historique (2)",
+                "Revenir en arrière",
+                "solution affichée",
+                "+12 XP",
+                "Utiliser le shell",
+                "+50 % sans indice",
+            ],
+        );
+        let none = loaded_app(&["Alice"], None);
+        let mut none = none;
+        send(&mut none, KeyCode::Esc);
+        go_to(&mut none, Screen::Progression);
+        assert_contains(
+            &rendered(&none, 100, 30),
+            &["Aucun profil actif : la progression"],
+        );
+    }
+
+    #[test]
+    fn paths_show_chapter_status_in_text() {
+        let mut app = loaded_app(&["Alice"], Some(0));
+        go_to(&mut app, Screen::Paths);
+        assert_contains(&rendered(&app, 100, 30), &["disponible", "verrouillé"]);
+    }
+
+    #[test]
+    fn compact_header_shows_only_current_screen() {
+        let mut app = loaded_app(&["Alice"], Some(0));
+        let compact = rendered(&app, 70, 20);
+        let header = compact.lines().next().unwrap_or_default();
+        assert!(
+            header.contains("Accueil (1/6)") && !header.contains("Diagnostic"),
+            "{header}"
+        );
+        go_to(&mut app, Screen::Library);
+        send(&mut app, KeyCode::Enter);
+        let reader = rendered(&app, 70, 20);
+        assert!(
+            reader
+                .lines()
+                .next()
+                .unwrap_or_default()
+                .contains("Chapitre (3/6)"),
+            "{reader}"
+        );
+    }
+
+    #[test]
+    fn long_notice_wraps_instead_of_being_truncated() {
+        let mut app = loaded_app(&["Alice"], Some(0));
+        go_to(&mut app, Screen::Paths);
+        send(&mut app, KeyCode::Down);
+        send(&mut app, KeyCode::Enter);
+        let text = rendered(&app, 60, 20);
+        let joined: String = text.lines().map(str::trim).collect::<Vec<_>>().join(" ");
+        assert!(
+            joined.contains("terminez d'abord « Le terminal »"),
+            "{text}"
+        );
+        assert!(joined.contains("depuis la Bibliothèque)"), "{text}");
     }
 }

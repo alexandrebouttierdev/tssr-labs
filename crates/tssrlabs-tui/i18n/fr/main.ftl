@@ -15,7 +15,7 @@ screen-diagnostic = Diagnostic
 ## Accueil
 
 home-version = Version { $version }
-home-upcoming = La progression (XP, niveaux, compétences) arrive dans la prochaine version.
+home-upcoming = Favoris, notes et « À reprendre » arrivent dans la prochaine version.
 home-greeting = Bonjour, { $name }
 home-no-activity = Aucune activité enregistrée pour ce profil.
 home-exercises = Exercices réussis : { $solved } sur { $total }.
@@ -266,3 +266,43 @@ paths-exercises = { $count ->
     [one] 1 exercice
    *[other] { $count } exercices
 }, { $solved } réussi(s).
+
+## Progression
+
+screen-progression = Progression
+header-compact = { $screen } ({ $index }/{ $total })
+home-level = Niveau { $level } · { $xp } XP au total
+home-streak = { $days ->
+    [0] Aucune série en cours
+    [one] Série : 1 jour d'activité
+   *[other] Série : { $days } jours d'activité
+}
+home-recommended = Recommandé : { $title }
+home-recommended-hint = { $key } pour l'ouvrir
+home-all-done = Tous les chapitres des parcours sont terminés.
+home-skills = Compétences
+home-recent = Activité récente
+home-no-recent = Aucune tentative pour l'instant.
+level-bar = { $into } / { $span } XP vers le niveau { $next }
+mastery-not-started = non commencée
+mastery-discovering = découverte
+mastery-progressing = en progrès
+mastery-mastered = maîtrisée
+outcome-correct = réussi
+outcome-incorrect = échoué
+outcome-revealed = solution affichée
+history-xp = +{ $xp } XP
+progression-totals = { $xp } XP · { $solved } exercices réussis sur { $total }
+progression-history = Historique ({ $count })
+progression-no-profile = Aucun profil actif : la progression est enregistrée par profil.
+progression-col-date = Date
+progression-col-exercise = Exercice
+progression-col-result = Résultat
+progression-col-xp = XP
+progression-rules = XP : 10, 20 ou 30 selon le niveau du chapitre, +50 % sans indice, +25 % du premier coup, rien si la solution a été affichée avant la réussite.
+paths-status-locked = verrouillé
+paths-status-available = disponible
+paths-status-completed = terminé
+paths-locked = chapitre verrouillé, terminez d'abord « { $titles } » (accès libre depuis la Bibliothèque).
+exercise-xp = { $xp } XP obtenus
+exercise-no-xp = aucun XP (solution affichée avant la réussite)

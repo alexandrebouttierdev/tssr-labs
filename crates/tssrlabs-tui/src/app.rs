@@ -4,17 +4,21 @@
 //! résultats d'effets). Toute opération d'entrée/sortie est demandée sous
 //! forme d'[`Effect`] récupéré par la boucle via [`App::take_effects`].
 
+mod learning;
+
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use tssrlabs_application::profiles::{ProfileError, ProfilesSnapshot};
+use tssrlabs_domain::content::Catalog;
 use tssrlabs_domain::host::HostInfo;
 use tssrlabs_domain::preferences::Preferences;
 use tssrlabs_domain::profile::{Profile, ProfileName, ProfileNameError};
 
 use crate::effects::{AppEvent, Effect, ProfileOp};
 use crate::i18n::{Language, Localizer, msg};
-use crate::keymap::{Command, Keymap};
+use crate::keymap::{Command, Context, Keymap};
 use crate::screens::diagnostic;
 use crate::theme::{Theme, ThemeChoice};
 use crate::widgets::input::TextInput;
@@ -34,6 +38,8 @@ pub struct Environment {
     pub log_dir: PathBuf,
     /// Fichier de la base de données.
     pub database_file: PathBuf,
+    /// Version du format de contenu prise en charge.
+    pub content_format: u32,
 }
 
 /// Écrans disponibles. Seuls les écrans réellement implémentés figurent ici.
@@ -41,15 +47,27 @@ pub struct Environment {
 pub enum Screen {
     /// Tableau de bord.
     Home,
+    /// Parcours guidés.
+    Paths,
+    /// Bibliothèque (exploration libre).
+    Library,
     /// Gestion des profils.
     Profiles,
     /// Diagnostic de l'hôte.
     Diagnostic,
+    /// Lecture d'un chapitre (hors du cycle des onglets).
+    Reader,
 }
 
 impl Screen {
     /// Ordre de navigation.
-    pub const ALL: [Self; 3] = [Self::Home, Self::Profiles, Self::Diagnostic];
+    pub const ALL: [Self; 5] = [
+        Self::Home,
+        Self::Paths,
+        Self::Library,
+        Self::Profiles,
+        Self::Diagnostic,
+    ];
 
     fn offset(self, delta: isize) -> Self {
         let len = Self::ALL.len() as isize;
@@ -61,8 +79,11 @@ impl Screen {
     pub fn title_id(self) -> &'static str {
         match self {
             Self::Home => msg::SCREEN_HOME,
+            Self::Paths => msg::SCREEN_PATHS,
+            Self::Library => msg::SCREEN_LIBRARY,
             Self::Profiles => msg::SCREEN_PROFILES,
             Self::Diagnostic => msg::SCREEN_DIAGNOSTIC,
+            Self::Reader => msg::SCREEN_READER,
         }
     }
 }
@@ -136,6 +157,10 @@ pub struct App {
     profiles: Option<ProfilesSnapshot>,
     busy: bool,
     effects: Vec<Effect>,
+    catalog: Arc<Catalog>,
+    library: learning::LibraryState,
+    paths_row: usize,
+    reader: Option<learning::ReaderState>,
     env: Environment,
     keymap: Keymap,
     i18n: Localizer,
@@ -143,7 +168,7 @@ pub struct App {
 
 impl App {
     /// Crée l'état initial et demande le chargement des profils.
-    pub fn new(env: Environment) -> Self {
+    pub fn new(env: Environment, catalog: Arc<Catalog>) -> Self {
         Self {
             running: true,
             screen: Screen::Home,
@@ -155,6 +180,10 @@ impl App {
             profiles: None,
             busy: true,
             effects: vec![Effect::LoadProfiles],
+            catalog,
+            library: learning::LibraryState::default(),
+            paths_row: 0,
+            reader: None,
             env,
             keymap: Keymap::default(),
             i18n: Localizer::new(Language::default()),
@@ -241,6 +270,16 @@ impl App {
         self.env.host.terminal.color.has_colors()
     }
 
+    /// Contexte des raccourcis pour l'écran courant.
+    pub fn context(&self) -> Context {
+        match self.screen {
+            Screen::Profiles => Context::Profiles,
+            Screen::Library => Context::Library,
+            Screen::Reader => Context::Reader,
+            _ => Context::Global,
+        }
+    }
+
     /// Effets demandés depuis le dernier appel.
     pub fn take_effects(&mut self) -> Vec<Effect> {
         std::mem::take(&mut self.effects)
@@ -271,7 +310,9 @@ impl App {
         self.notice = None;
         if self.modal.as_ref().is_some_and(Modal::is_dialog) {
             self.on_dialog_key(key);
-        } else if let Some(command) = self.keymap.command_for(key) {
+        } else if self.library.searching && self.screen == Screen::Library && !self.help_open() {
+            self.on_search_key(key);
+        } else if let Some(command) = self.keymap.command_for(key, self.context()) {
             self.on_command(command);
         }
     }
@@ -302,6 +343,9 @@ impl App {
             }
             return;
         }
+        if self.on_learning_command(command) {
+            return;
+        }
         match command {
             Command::Quit => self.running = false,
             Command::ToggleHelp => self.modal = Some(Modal::Help),
@@ -314,6 +358,16 @@ impl App {
             Command::NewProfile => self.open_dialog_create(),
             Command::RenameProfile => self.open_dialog_rename(),
             Command::DeleteProfile => self.open_dialog_delete(),
+            // Commandes de lecture et de bibliothèque hors de leur écran.
+            Command::FocusSearch
+            | Command::CycleDomain
+            | Command::CycleDifficulty
+            | Command::CycleDuration
+            | Command::ClearFilters
+            | Command::PageUp
+            | Command::PageDown
+            | Command::Top
+            | Command::Bottom => {}
         }
     }
 
@@ -340,7 +394,7 @@ impl App {
                 &mut self.profile_row,
                 self.profiles.as_ref().map_or(0, |s| s.profiles.len()),
             ),
-            Screen::Home => return,
+            _ => return,
         };
         *row = if down {
             (*row + 1).min(count.saturating_sub(1))
@@ -618,7 +672,67 @@ pub(crate) mod tests {
             config_dir: "/home/apprenant/.config/tssrlabs".into(),
             log_dir: "/home/apprenant/.local/share/tssrlabs/logs".into(),
             database_file: "/home/apprenant/.local/share/tssrlabs/tssrlabs.sqlite3".into(),
+            content_format: 1,
         }
+    }
+
+    /// Catalogue de test : deux chapitres liés et un parcours.
+    pub(crate) fn test_catalog() -> Arc<Catalog> {
+        use tssrlabs_domain::content::{
+            Chapter, ContentId, Difficulty, Domain, LearningPath, Skill, Source,
+        };
+        let id = |v: &str| ContentId::parse(v).unwrap();
+        let chapter =
+            |name: &str, title: &str, difficulty, minutes, prerequisites: Vec<ContentId>| Chapter {
+                id: id(name),
+                version: "1.0.0".into(),
+                title: title.into(),
+                summary: format!("Résumé de {title}."),
+                domain: Domain::Linux,
+                difficulty,
+                estimated_minutes: minutes,
+                tags: vec!["shell".into()],
+                skills: vec![id("linux-shell")],
+                objectives: vec!["Comprendre le sujet".into()],
+                prerequisites,
+                body: format!(
+                    "# {title}\n\n{}",
+                    "Ligne de texte du chapitre.\n\n".repeat(60)
+                ),
+                sources: vec![Source {
+                    title: "Manuel".into(),
+                    url: "https://exemple.org".into(),
+                    verified_on: None,
+                }],
+                authors: vec!["Équipe".into()],
+                license: "MIT".into(),
+            };
+        Arc::new(
+            Catalog::new(
+                vec![Skill {
+                    id: id("linux-shell"),
+                    name: "Utiliser le shell".into(),
+                    domain: Domain::Linux,
+                }],
+                vec![
+                    chapter("terminal", "Le terminal", Difficulty::Beginner, 20, vec![]),
+                    chapter(
+                        "permissions",
+                        "Les permissions",
+                        Difficulty::Intermediate,
+                        40,
+                        vec![id("terminal")],
+                    ),
+                ],
+                vec![LearningPath {
+                    id: id("bases"),
+                    title: "Linux — les bases".into(),
+                    summary: "Premiers pas.".into(),
+                    chapters: vec![id("terminal"), id("permissions")],
+                }],
+            )
+            .unwrap(),
+        )
     }
 
     pub(crate) fn profile(id: i64, name: &str) -> Profile {
@@ -651,7 +765,7 @@ pub(crate) mod tests {
 
     /// Application chargée avec les profils indiqués.
     pub(crate) fn loaded_app(names: &[&str], active: Option<usize>) -> App {
-        let mut app = App::new(test_env(ColorSupport::TrueColor));
+        let mut app = App::new(test_env(ColorSupport::TrueColor), test_catalog());
         assert_eq!(app.take_effects(), vec![Effect::LoadProfiles]);
         app.handle_app_event(AppEvent::Profiles {
             op: ProfileOp::Load,
@@ -673,7 +787,7 @@ pub(crate) mod tests {
         })
     }
 
-    fn send(app: &mut App, code: KeyCode) {
+    pub(crate) fn send(app: &mut App, code: KeyCode) {
         app.handle_terminal_event(&press(code));
     }
 
@@ -685,7 +799,7 @@ pub(crate) mod tests {
 
     #[test]
     fn starts_by_loading_profiles() {
-        let mut app = App::new(test_env(ColorSupport::TrueColor));
+        let mut app = App::new(test_env(ColorSupport::TrueColor), test_catalog());
         assert!(app.is_busy());
         assert_eq!(app.profiles(), None);
         assert_eq!(app.take_effects(), vec![Effect::LoadProfiles]);
@@ -707,7 +821,7 @@ pub(crate) mod tests {
 
     #[test]
     fn remembered_profile_goes_to_dashboard_with_its_theme() {
-        let mut app = App::new(test_env(ColorSupport::TrueColor));
+        let mut app = App::new(test_env(ColorSupport::TrueColor), test_catalog());
         app.handle_app_event(AppEvent::Profiles {
             op: ProfileOp::Load,
             result: Ok(snapshot(&["Alice"], Some(0), ThemeChoice::Colorblind)),
@@ -803,8 +917,7 @@ pub(crate) mod tests {
     #[test]
     fn select_rename_and_delete_from_profiles_screen() {
         let mut app = loaded_app(&["Alice", "Bob"], Some(0));
-        send(&mut app, KeyCode::Tab);
-        assert_eq!(app.screen(), Screen::Profiles);
+        go_to(&mut app, Screen::Profiles);
 
         send(&mut app, KeyCode::Down);
         send(&mut app, KeyCode::Enter);
@@ -818,7 +931,7 @@ pub(crate) mod tests {
         });
         assert_eq!(app.screen(), Screen::Home);
 
-        send(&mut app, KeyCode::Tab);
+        go_to(&mut app, Screen::Profiles);
         assert_eq!(app.profile_row(), 1, "sélection sur le profil actif");
         send(&mut app, KeyCode::Char('r'));
         type_text(&mut app, "by");
@@ -897,7 +1010,7 @@ pub(crate) mod tests {
 
     #[test]
     fn theme_does_not_change_without_colors() {
-        let mut app = App::new(test_env(ColorSupport::None));
+        let mut app = App::new(test_env(ColorSupport::None), test_catalog());
         app.handle_app_event(AppEvent::Profiles {
             op: ProfileOp::Load,
             result: Ok(snapshot(&["Alice"], Some(0), ThemeChoice::Dark)),
@@ -923,7 +1036,7 @@ pub(crate) mod tests {
 
     #[test]
     fn load_failure_keeps_app_usable() {
-        let mut app = App::new(test_env(ColorSupport::TrueColor));
+        let mut app = App::new(test_env(ColorSupport::TrueColor), test_catalog());
         app.handle_app_event(AppEvent::Profiles {
             op: ProfileOp::Load,
             result: Err(ProfileError::Storage(RepositoryError::Backend(
@@ -957,5 +1070,108 @@ pub(crate) mod tests {
             send(&mut app, KeyCode::Char('j'));
         }
         assert_eq!(app.diagnostic_row(), diagnostic::ROW_COUNT - 1);
+    }
+
+    // --- Contenu : bibliothèque, parcours, lecture -----------------------
+
+    pub(crate) fn go_to(app: &mut App, screen: Screen) {
+        for _ in 0..Screen::ALL.len() {
+            if app.screen() == screen {
+                return;
+            }
+            send(app, KeyCode::Tab);
+        }
+        panic!("écran {screen:?} inaccessible");
+    }
+
+    #[test]
+    fn tab_order_includes_content_screens() {
+        let mut app = loaded_app(&["Alice"], Some(0));
+        let mut seen = vec![app.screen()];
+        for _ in 0..4 {
+            send(&mut app, KeyCode::Tab);
+            seen.push(app.screen());
+        }
+        assert_eq!(seen, Screen::ALL.to_vec());
+    }
+
+    #[test]
+    fn library_search_treats_letters_as_text() {
+        let mut app = loaded_app(&["Alice"], Some(0));
+        go_to(&mut app, Screen::Library);
+        assert_eq!(app.library_results().len(), 2);
+        send(&mut app, KeyCode::Char('/'));
+        type_text(&mut app, "PERMISSIONS q");
+        assert!(app.is_running(), "« q » est du texte pendant la recherche");
+        assert_eq!(app.library_results().len(), 0);
+        send(&mut app, KeyCode::Backspace);
+        send(&mut app, KeyCode::Backspace);
+        assert_eq!(app.library_results().len(), 1);
+        send(&mut app, KeyCode::Enter);
+        assert!(!app.library().searching);
+        send(&mut app, KeyCode::Char('x'));
+        assert_eq!(app.library_results().len(), 2);
+    }
+
+    #[test]
+    fn library_filters_cycle_and_reset() {
+        let mut app = loaded_app(&["Alice"], Some(0));
+        go_to(&mut app, Screen::Library);
+        send(&mut app, KeyCode::Char('f'));
+        assert_eq!(app.library_results().len(), 1, "débutant seulement");
+        send(&mut app, KeyCode::Char('f'));
+        send(&mut app, KeyCode::Char('m'));
+        send(&mut app, KeyCode::Char('m'));
+        assert!(app.library_results().is_empty(), "intermédiaire ≤ 30 min");
+        send(&mut app, KeyCode::Char('d'));
+        assert_eq!(
+            app.library().query.domain,
+            Some(tssrlabs_domain::content::Domain::Linux)
+        );
+        send(&mut app, KeyCode::Char('x'));
+        assert_eq!(
+            app.library().query,
+            tssrlabs_domain::content::LibraryQuery::default()
+        );
+    }
+
+    #[test]
+    fn opening_and_closing_a_chapter_returns_to_origin() {
+        let mut app = loaded_app(&["Alice"], Some(0));
+        go_to(&mut app, Screen::Paths);
+        send(&mut app, KeyCode::Down);
+        send(&mut app, KeyCode::Enter);
+        assert_eq!(app.screen(), Screen::Reader);
+        assert_eq!(app.reader().unwrap().chapter.as_str(), "permissions");
+        send(&mut app, KeyCode::Esc);
+        assert_eq!(app.screen(), Screen::Paths);
+        assert!(app.reader().is_none());
+        assert_eq!(app.paths_row(), 1, "sélection conservée");
+    }
+
+    #[test]
+    fn reader_scroll_is_bounded_by_rendered_height() {
+        let mut app = loaded_app(&["Alice"], Some(0));
+        go_to(&mut app, Screen::Library);
+        send(&mut app, KeyCode::Enter);
+        // Avant tout rendu, la borne est 0 : aucun défilement possible.
+        send(&mut app, KeyCode::Down);
+        assert_eq!(app.reader().unwrap().scroll, 0);
+        app.reader().unwrap().max_scroll.set(50);
+        app.reader().unwrap().page.set(20);
+        send(&mut app, KeyCode::PageDown);
+        assert_eq!(app.reader().unwrap().scroll, 19);
+        send(&mut app, KeyCode::End);
+        assert_eq!(app.reader().unwrap().scroll, 50);
+        send(&mut app, KeyCode::Down);
+        assert_eq!(app.reader().unwrap().scroll, 50);
+        send(&mut app, KeyCode::Home);
+        assert_eq!(app.reader().unwrap().scroll, 0);
+        send(&mut app, KeyCode::Tab);
+        assert_eq!(
+            app.screen(),
+            Screen::Profiles,
+            "Tab quitte la lecture vers l'écran suivant"
+        );
     }
 }

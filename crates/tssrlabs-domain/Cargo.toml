@@ -13,6 +13,7 @@ publish.workspace = true
 [dependencies]
 jiff.workspace = true
 thiserror.workspace = true
+unicode-normalization.workspace = true
 
 [lints]
 workspace = true

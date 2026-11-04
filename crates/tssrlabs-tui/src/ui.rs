@@ -51,6 +51,9 @@ pub fn render(app: &App, frame: &mut Frame) {
 
     match app.screen() {
         Screen::Home => screens::home::render(app, &theme, frame, content),
+        Screen::Paths => screens::paths::render(app, &theme, mode, frame, content),
+        Screen::Library => screens::library::render(app, &theme, mode, frame, content),
+        Screen::Reader => screens::reader::render(app, &theme, frame, content),
         Screen::Profiles => screens::profiles::render(app, &theme, mode, frame, content),
         Screen::Diagnostic => screens::diagnostic::render(app, &theme, frame, content, area),
     }
@@ -65,7 +68,8 @@ pub fn render(app: &App, frame: &mut Frame) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::tests::{loaded_app, test_env};
+    use crate::app::Screen;
+    use crate::app::tests::{go_to, loaded_app, test_catalog, test_env};
     use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyEventState, KeyModifiers};
     use ratatui::Terminal;
     use ratatui::backend::TestBackend;
@@ -102,7 +106,7 @@ mod tests {
 
     #[test]
     fn loading_state_is_explicit() {
-        let app = App::new(test_env(ColorSupport::TrueColor));
+        let app = App::new(test_env(ColorSupport::TrueColor), test_catalog());
         assert_contains(&rendered(&app, 100, 30), &["Chargement des profils"]);
     }
 
@@ -117,7 +121,7 @@ mod tests {
                 "Diagnostic",
                 "Bonjour, Alice",
                 "Aucune activité",
-                "Profil : Alice · Thème : Sombre",
+                "Profil : Alice",
                 "Quitter",
             ],
         );
@@ -141,7 +145,7 @@ mod tests {
     #[test]
     fn profiles_screen_lists_profiles_with_textual_state() {
         let mut app = loaded_app(&["Alice", "Bob"], Some(0));
-        send(&mut app, KeyCode::Tab);
+        go_to(&mut app, Screen::Profiles);
         let text = rendered(&app, 100, 30);
         assert_contains(
             &text,
@@ -166,7 +170,7 @@ mod tests {
     #[test]
     fn footer_always_keeps_help_and_quit() {
         let mut app = loaded_app(&["Alice"], Some(0));
-        send(&mut app, KeyCode::Tab);
+        go_to(&mut app, Screen::Profiles);
         for width in [60, 80, 100] {
             let text = rendered(&app, width, 30);
             let footer = text.lines().last().unwrap_or_default();
@@ -180,7 +184,7 @@ mod tests {
     #[test]
     fn delete_dialog_warns_and_mentions_backup() {
         let mut app = loaded_app(&["Alice"], Some(0));
-        send(&mut app, KeyCode::Tab);
+        go_to(&mut app, Screen::Profiles);
         send(&mut app, KeyCode::Char('s'));
         assert_contains(
             &rendered(&app, 100, 30),
@@ -228,38 +232,98 @@ mod tests {
     }
 
     #[test]
-    fn help_overlay_lists_shortcuts() {
+    fn help_overlay_lists_shortcuts_of_current_screen() {
         let mut app = loaded_app(&["Alice"], Some(0));
+        send(&mut app, KeyCode::F(1));
+        let home = rendered(&app, 100, 30);
+        assert_contains(&home, &["Raccourcis clavier", "Ctrl+C", "Échap", "AZERTY"]);
+        assert!(!home.contains("Suppr"), "{home}");
+
+        send(&mut app, KeyCode::Esc);
+        go_to(&mut app, Screen::Profiles);
+        send(&mut app, KeyCode::F(1));
+        assert_contains(&rendered(&app, 100, 30), &["s, Suppr", "Nouveau"]);
+
+        send(&mut app, KeyCode::Esc);
+        go_to(&mut app, Screen::Library);
         send(&mut app, KeyCode::F(1));
         assert_contains(
             &rendered(&app, 100, 30),
+            &["Rechercher", "Domaine", "Effacer les filtres"],
+        );
+    }
+
+    #[test]
+    fn paths_library_and_reader_render_real_content() {
+        let mut app = loaded_app(&["Alice"], Some(0));
+        go_to(&mut app, Screen::Paths);
+        assert_contains(
+            &rendered(&app, 100, 30),
             &[
-                "Raccourcis clavier",
-                "Ctrl+C",
-                "Échap",
-                "s, Suppr",
-                "AZERTY",
+                "Linux — les bases",
+                "2 chapitres",
+                "60 min",
+                "1. Le terminal",
+                "2. Les permissions",
+                "Aucun prérequis",
+            ],
+        );
+        go_to(&mut app, Screen::Library);
+        let library = rendered(&app, 100, 30);
+        assert_contains(
+            &library,
+            &[
+                "Recherche",
+                "/ pour saisir",
+                "Domaine : tous",
+                "2 chapitres",
+                "Intermédiaire",
+                "Entrée Ouvrir",
+            ],
+        );
+        send(&mut app, KeyCode::Enter);
+        let reader = rendered(&app, 100, 30);
+        assert_contains(
+            &reader,
+            &[
+                "Le terminal",
+                "Linux · Débutant · environ 20 min",
+                "Objectifs",
+                "Position : 0 %",
+                "Échap Retour",
+            ],
+        );
+        // Fin du chapitre : sources et statut de vérification.
+        send(&mut app, KeyCode::End);
+        let end = rendered(&app, 100, 30);
+        assert_contains(
+            &end,
+            &[
+                "Sources",
+                "non vérifiée",
+                "Licence : MIT",
+                "Position : 100 %",
             ],
         );
     }
 
     #[test]
     fn theme_shortcut_is_hidden_without_colors() {
-        let app = App::new(test_env(ColorSupport::None));
+        let app = App::new(test_env(ColorSupport::None), test_catalog());
         let text = rendered(&app, 100, 30);
         assert!(!text.contains("t Thème"), "{text}");
-        assert!(text.contains("Thème : Monochrome"), "{text}");
+        assert!(!text.contains("Thème : Sombre"), "{text}");
     }
 
     #[test]
     fn every_state_and_size_renders_without_panic() {
         let mut apps = vec![
-            App::new(test_env(ColorSupport::TrueColor)),
+            App::new(test_env(ColorSupport::TrueColor), test_catalog()),
             loaded_app(&[], None),
             loaded_app(&["Alice", "Bob avec un nom long"], Some(1)),
         ];
         let mut app = loaded_app(&["Alice"], Some(0));
-        send(&mut app, KeyCode::Tab);
+        go_to(&mut app, Screen::Profiles);
         send(&mut app, KeyCode::Char('s'));
         apps.push(app);
         for app in &mut apps {

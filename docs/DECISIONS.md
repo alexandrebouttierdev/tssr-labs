@@ -169,3 +169,6 @@ Décisions prises lors de l'audit initial, en complément des points ci-dessus.
 - Rust : édition 2024, toolchain épinglée dans `rust-toolchain.toml`.
 - Migrations SQLite : exécuteur interne fondé sur `PRAGMA user_version` (une transaction par migration, copie de sécurité préalable, refus d'un schéma plus récent) plutôt que `rusqlite_migration`, dont la version disponible impose une version plus ancienne de `rusqlite`.
 - Suppression d'un profil : confirmation par saisie exacte du nom et copie de sécurité de la base créée avant la suppression ; si la copie échoue, rien n'est supprimé.
+- Contenu pédagogique embarqué : format v1 (`catalog.json`, `chapters/<id>/chapter.json` + `chapter.md`), lecture stricte, validation complète au chargement et en CI ; caractères de contrôle refusés dans tout texte de contenu.
+- Sources de contenu : `verified_on` n'est renseigné qu'après vérification humaine ; sinon la source est affichée « non vérifiée ».
+- Raccourcis clavier par contexte d'écran : conflits détectés seulement entre commandes pouvant être actives en même temps.

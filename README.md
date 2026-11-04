@@ -12,6 +12,7 @@ Ce dépôt contient le cadrage initial, les décisions produit et techniques, un
 - [`docs/ROADMAP.md`](docs/ROADMAP.md) — phases de développement et priorités du MVP.
 - [`docs/UX_TERMINAL.md`](docs/UX_TERMINAL.md) — principes d'interface Ratatui.
 - [`docs/SCENARIO_FORMAT.md`](docs/SCENARIO_FORMAT.md) — format de scénario `.tssrlab`.
+- [`docs/CONTENT_FORMAT.md`](docs/CONTENT_FORMAT.md) — format des cours embarqués (`content/`).
 - [`docs/LABS_AND_ISOLATION.md`](docs/LABS_AND_ISOLATION.md) — exécution des laboratoires et sécurité.
 - [`docs/AI_INTEGRATION.md`](docs/AI_INTEGRATION.md) — fournisseurs, confidentialité et usages IA.
 - [`docs/DATA_AND_BACKUPS.md`](docs/DATA_AND_BACKUPS.md) — SQLite, profils, sauvegardes et snapshots.
@@ -38,7 +39,7 @@ Ce dépôt contient le cadrage initial, les décisions produit et techniques, un
 
 ## Développement
 
-État actuel : **tranche 2 (profils locaux et préférences dans SQLite)** — livrable de la phase 0 : l'application démarre, crée ou choisit un profil, affiche un tableau de bord (vide tant qu'aucune activité n'existe) et enregistre ses préférences. Voir [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md).
+État actuel : **tranche 3 (contenu pédagogique hors ligne)** — profils et préférences, parcours guidés, bibliothèque avec recherche et filtres, lecteur de chapitres. Premier parcours : « Linux — les bases ».
 
 Prérequis : [rustup](https://rustup.rs). La toolchain est épinglée dans `rust-toolchain.toml` et installée automatiquement.
 
@@ -58,7 +59,7 @@ Variables d'environnement :
 - `TSSRLABS_COLORS` : impose le niveau de couleurs (`none`, `16`, `256`, `truecolor`) si la détection automatique se trompe.
 - `NO_COLOR` : désactive les couleurs ([no-color.org](https://no-color.org)).
 
-Raccourcis : `Tab`/`Maj+Tab` changer d'écran, `t` thème, `F1` ou `?` aide, `q` quitter ; sur l'écran Profils : `Entrée` activer, `n` créer, `r` renommer, `s` ou `Suppr` supprimer. L'affichage complet demande 100×30 ; le mode compact s'active jusqu'à 60×16.
+Raccourcis : `Tab`/`Maj+Tab` changer d'écran, `t` thème, `F1` ou `?` aide, `q` quitter ; sur l'écran Profils : `Entrée` activer, `n` créer, `r` renommer, `s` ou `Suppr` supprimer ; dans la Bibliothèque : `/` rechercher, `d` domaine, `f` niveau, `m` durée, `x` effacer, `Entrée` ouvrir ; dans un chapitre : flèches, `PgSuiv`/`Espace`, `Début`/`Fin`, `Échap` retour. `F1` affiche les raccourcis de l'écran courant. L'affichage complet demande 100×30 ; le mode compact s'active jusqu'à 60×16.
 
 Les journaux sont uniquement locaux ; les secrets reconnaissables y sont masqués. Aucune donnée n'est envoyée sur le réseau.
 

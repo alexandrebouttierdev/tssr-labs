@@ -12,8 +12,9 @@ publish.workspace = true
 crossterm.workspace = true
 fluent-bundle.workspace = true
 futures-util.workspace = true
+pulldown-cmark.workspace = true
 jiff = { workspace = true, features = ["tz-system", "tzdb-bundle-platform", "tzdb-zoneinfo"] }
-ratatui.workspace = true
+ratatui = { workspace = true, features = ["unstable-rendered-line-info"] }
 thiserror.workspace = true
 tokio.workspace = true
 tokio-util = { workspace = true, features = ["rt"] }

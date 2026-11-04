@@ -1,0 +1,27 @@
+{
+  "id": "linux-terminal-premiers-pas",
+  "version": "1.0.0",
+  "title": "Le terminal et le shell : premiers pas",
+  "summary": "Comprendre l'invite de commande, la structure d'une commande, trouver de l'aide et se déplacer efficacement.",
+  "domain": "linux",
+  "difficulty": "debutant",
+  "estimated_minutes": 25,
+  "tags": ["terminal", "bash", "shell", "man", "aide", "historique", "complétion"],
+  "skills": ["linux-shell"],
+  "objectives": [
+    "Distinguer terminal, console et shell",
+    "Lire une invite de commande",
+    "Décomposer une commande en commande, options et arguments",
+    "Trouver de l'aide avec man, --help et help",
+    "Se déplacer avec pwd, ls et cd",
+    "Gagner du temps avec la complétion et l'historique"
+  ],
+  "prerequisites": [],
+  "sources": [
+    { "title": "GNU Bash Reference Manual", "url": "https://www.gnu.org/software/bash/manual/", "verified_on": null },
+    { "title": "GNU Coreutils Manual", "url": "https://www.gnu.org/software/coreutils/manual/", "verified_on": null },
+    { "title": "Debian Reference, chapitre 1 : Tutoriel GNU/Linux", "url": "https://www.debian.org/doc/manuals/debian-reference/ch01.fr.html", "verified_on": null }
+  ],
+  "authors": ["Contributeurs TSSR Labs"],
+  "license": "MIT"
+}

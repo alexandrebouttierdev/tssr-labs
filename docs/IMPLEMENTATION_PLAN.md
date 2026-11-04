@@ -12,7 +12,7 @@ SQLite).
 
 ```text
 crates/
-├── tssrlabs-domain/          # règles métier pures (modèle de l'hôte, puis profils…)
+├── tssrlabs-domain/          # règles métier pures (hôte, profils, contenu pédagogique…)
 ├── tssrlabs-application/     # cas d'utilisation + ports (profils…)
 ├── tssrlabs-infrastructure/  # adaptateurs : chemins, journaux, SQLite, conteneurs…
 ├── tssrlabs-tui/             # présentation Ratatui (architecture de type Elm)
@@ -62,7 +62,7 @@ Les textes de l'interface sont dans `crates/tssrlabs-tui/i18n/<langue>/*.ftl`
 | i18n | `fluent-bundle`, `unic-langid` | 1 |
 | SQLite | `rusqlite` (bundled) + migrations internes (`user_version`) | 2 |
 | Dates | `jiff` | 2 |
-| Contenu | `serde`, `serde_json`, `pulldown-cmark`, `include_dir` | 3 |
+| Contenu | `serde`, `serde_json`, `pulldown-cmark`, `include_dir`, `unicode-normalization` (recherche sans accents) | 3 |
 | Archives `.tssrlab` | `zip`, `sha2`, `semver` | 6 |
 | Conteneurs | `bollard` | 7 |
 | Émulation terminal | `vt100` (+ `tui-term` ou rendu maison) | 9 |
@@ -75,7 +75,7 @@ Les textes de l'interface sont dans `crates/tssrlabs-tui/i18n/<langue>/*.ftl`
 | 0 | Socle : workspace, lints, CI 3 OS, licence MIT, restauration du terminal (y compris panique), journaux locaux avec masquage | L'application démarre et quitte proprement | **Terminée** |
 | 1 | Boucle d'événements, navigation, thème sombre + contraste élevé, responsive 100×30 / compact / « terminal trop petit », aide, i18n FR (Fluent), écran Diagnostic | Navigation et responsive | **Terminée** |
 | 2 | SQLite (thread dédié, migration v1), profils (créer/choisir/renommer/supprimer avec confirmation), préférences | Livrable phase 0 | **Terminée** |
-| 3 | Contenu : cours, chapitres, parcours, compétences ; Markdown + JSON ; parcours d'exemple « Linux — les bases » ; bibliothèque, filtres, recherche ; validation du contenu embarqué | Lecture hors ligne | À faire |
+| 3 | Contenu : cours, chapitres, parcours, compétences ; Markdown + JSON ; parcours d'exemple « Linux — les bases » ; bibliothèque, filtres, recherche ; validation du contenu embarqué | Lecture hors ligne | **Terminée** |
 | 4 | Exercices guidés : QCM, compléter, analyser une sortie, rédiger une commande (comparaison textuelle signalée) ; indices, tentatives | Faire un exercice | À faire |
 | 5 | XP (domaine pur), niveaux, maîtrise, historique ; dashboard réel ; favoris, « À reprendre », notes ; parcours et déblocage | Livrable phase 1 | À faire |
 | 6 | Schéma de scénario v1, import/export `.tssrlab` sécurisé, rapport de validation sans exécution | Import/export + tests sécurité | À faire |
@@ -112,6 +112,12 @@ Ensuite : phases 2 (fin) à 7 de la [feuille de route](ROADMAP.md).
 - **Référentiel TSSR** : version du REAC à utiliser comme source officielle du
   parcours complet. En attendant, seul un petit contenu d'exemple original est
   rédigé.
+- **Licence du contenu pédagogique** : les chapitres embarqués sont pour
+  l'instant sous la licence du dépôt (MIT). Une licence Creative Commons
+  (CC BY-SA 4.0, par exemple) serait plus courante pour du contenu éditorial.
+- **Vérification des sources** : les sources citées n'ont pas pu être
+  consultées depuis l'environnement de développement (réseau restreint) ;
+  elles sont marquées « non vérifiées » jusqu'à vérification humaine.
 
 ## 6. Journal des tranches
 
@@ -239,3 +245,48 @@ Limites connues :
 - Seul le thème est enregistré pour l'instant ; la personnalisation des
   raccourcis et la densité suivront.
 - Les journaux mentionnent les identifiants de profil, jamais leurs noms.
+
+### Tranche 3 — Contenu, bibliothèque et lecture (terminée)
+
+- Domaine : `ContentId`, `Domain`, `Difficulty`, `Skill`, `Chapter`,
+  `LearningPath`, `Source`, `Catalog` validé (références, cycles de
+  prérequis, ordre des parcours, champs vides, caractères de contrôle) et
+  recherche insensible à la casse et aux accents avec filtres (domaine,
+  niveau, durée maximale).
+- Format de contenu v1 documenté dans [`CONTENT_FORMAT.md`](CONTENT_FORMAT.md) :
+  `catalog.json` + `chapters/<id>/chapter.json` + `chapter.md`, lecture
+  stricte (champ inconnu refusé), contenu embarqué dans le binaire.
+- Contenu original : parcours « Linux — les bases » (terminal et shell ;
+  arborescence et fichiers ; utilisateurs, groupes et permissions).
+- Interface :
+  - écran **Parcours** : chapitres dans l'ordre, niveau, durée, total du
+    parcours, résumé et prérequis du chapitre sélectionné ;
+  - écran **Bibliothèque** : recherche en direct (`/`), filtres domaine
+    (`d`), niveau (`f`), durée (`m`), effacement (`x`), compteur de
+    résultats ;
+  - **lecteur** : métadonnées, objectifs, prérequis, compétences, corps
+    Markdown, sources avec statut de vérification, crédits et licence ;
+    défilement (↑ ↓, PgPréc/PgSuiv, Espace, Début/Fin), barre de défilement
+    et position en pourcentage ; Échap revient à l'écran d'origine ;
+  - raccourcis par **contexte** (une touche peut servir sur deux écrans
+    différents ; conflits détectés par contexte) ; aide limitée aux
+    raccourcis de l'écran courant ; libellés adaptés (« Ouvrir »,
+    « Retour ») ;
+  - en-tête : le nom du profil reste visible, le thème est omis si la place
+    manque.
+- Sécurité : tout texte affiché (Markdown, métadonnées) est débarrassé des
+  caractères de contrôle ; le HTML brut n'est jamais interprété.
+- Vérifié dans un vrai pseudo-terminal : tableau de bord, parcours,
+  recherche « droits », lecture et défilement, retour avec recherche
+  conservée.
+
+Limites connues :
+- La progression (chapitre lu, déblocage selon les prérequis) arrive avec
+  la tranche 5 ; les prérequis sont affichés mais pas imposés.
+- Dans le lecteur, la suite d'un élément de liste replié n'est pas
+  réindentée sous le texte de la puce.
+- Les tableaux Markdown ne sont pas mis en forme.
+- En mode compact, l'aide peut dépasser la hauteur disponible ; elle est
+  alors coupée.
+- La recherche porte sur titre, résumé, mots-clés, objectifs et
+  compétences, pas sur le corps des chapitres.

@@ -1,0 +1,27 @@
+{
+  "id": "linux-arborescence-fichiers",
+  "version": "1.0.0",
+  "title": "Arborescence et manipulation de fichiers",
+  "summary": "Se repérer dans l'arborescence Linux, utiliser chemins absolus et relatifs, créer, copier, déplacer, supprimer et lire des fichiers.",
+  "domain": "linux",
+  "difficulty": "debutant",
+  "estimated_minutes": 35,
+  "tags": ["arborescence", "fhs", "chemins", "mkdir", "cp", "mv", "rm", "cat", "less", "tail", "globbing"],
+  "skills": ["linux-fichiers", "linux-shell"],
+  "objectives": [
+    "Décrire le rôle des principaux répertoires (/etc, /home, /var, /tmp, /usr…)",
+    "Utiliser des chemins absolus et relatifs",
+    "Créer, copier, déplacer et renommer fichiers et répertoires",
+    "Supprimer en connaissant les risques",
+    "Lire un fichier entier, son début ou sa fin",
+    "Utiliser les motifs *, ? et [ ]"
+  ],
+  "prerequisites": ["linux-terminal-premiers-pas"],
+  "sources": [
+    { "title": "Filesystem Hierarchy Standard 3.0", "url": "https://refspecs.linuxfoundation.org/FHS_3.0/fhs/index.html", "verified_on": null },
+    { "title": "GNU Coreutils Manual", "url": "https://www.gnu.org/software/coreutils/manual/", "verified_on": null },
+    { "title": "GNU Bash Reference Manual — Filename Expansion", "url": "https://www.gnu.org/software/bash/manual/html_node/Filename-Expansion.html", "verified_on": null }
+  ],
+  "authors": ["Contributeurs TSSR Labs"],
+  "license": "MIT"
+}

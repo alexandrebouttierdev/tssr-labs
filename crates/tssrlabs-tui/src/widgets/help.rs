@@ -7,15 +7,18 @@ use ratatui::widgets::{Block, BorderType, Clear, Padding, Paragraph, Row, Table,
 
 use crate::app::App;
 use crate::i18n::msg;
-use crate::keymap::Command;
+use crate::keymap::{Command, Context};
 use crate::theme::Theme;
 use crate::widgets::centered;
+use crate::widgets::chrome::command_label;
 
 /// Dessine l'aide par-dessus l'écran courant.
 pub fn render(app: &App, theme: &Theme, frame: &mut Frame, area: Rect) {
     let i18n = app.i18n();
     let rows: Vec<Row> = Command::ALL
         .into_iter()
+        // Commandes globales et celles de l'écran courant seulement.
+        .filter(|c| c.context() == Context::Global || c.context() == app.context())
         .filter(|c| *c != Command::CycleTheme || app.can_change_theme())
         .map(|command| {
             let keys: Vec<String> = app
@@ -25,7 +28,7 @@ pub fn render(app: &App, theme: &Theme, frame: &mut Frame, area: Rect) {
                 .collect();
             Row::new(vec![
                 Line::styled(keys.join(", "), theme.accent),
-                Line::styled(i18n.t(command.label_id()), theme.base),
+                Line::styled(command_label(app, command), theme.base),
             ])
         })
         .collect();

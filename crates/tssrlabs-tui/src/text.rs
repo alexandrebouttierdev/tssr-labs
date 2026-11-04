@@ -4,6 +4,21 @@ use jiff::Timestamp;
 use jiff::tz::TimeZone;
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
+/// Neutralise les caractères de contrôle avant affichage : une tabulation
+/// devient quatre espaces, tout autre caractère de contrôle (dont ESC, qui
+/// introduit les séquences d'échappement du terminal) devient « � ».
+pub fn sanitize(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    for c in text.chars() {
+        match c {
+            '\t' => out.push_str("    "),
+            c if c.is_control() => out.push('\u{FFFD}'),
+            c => out.push(c),
+        }
+    }
+    out
+}
+
 /// Date et heure dans le fuseau du système (« 03/11/2026 15:42 »).
 pub fn format_local(timestamp: Timestamp) -> String {
     format_in(timestamp, &TimeZone::system())
@@ -60,6 +75,13 @@ pub fn ellipsize_middle(text: &str, max_width: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn sanitize_neutralizes_escape_sequences() {
+        assert_eq!(sanitize("a\tb"), "a    b");
+        assert_eq!(sanitize("\u{1b}[2J\u{7}"), "\u{FFFD}[2J\u{FFFD}");
+        assert_eq!(sanitize("Élève"), "Élève");
+    }
 
     #[test]
     fn dates_use_french_day_month_order() {

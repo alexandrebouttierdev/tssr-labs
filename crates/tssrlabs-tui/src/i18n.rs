@@ -148,6 +148,69 @@ messages! {
     LAYOUT_FULL = "layout-full",
     LAYOUT_COMPACT = "layout-compact",
     SIZE_VALUE = "size-value",
+    SCREEN_PATHS = "screen-paths",
+    SCREEN_LIBRARY = "screen-library",
+    SCREEN_READER = "screen-reader",
+    CMD_OPEN = "cmd-open",
+    CMD_BACK = "cmd-back",
+    CMD_FOCUS_SEARCH = "cmd-focus-search",
+    CMD_CYCLE_DOMAIN = "cmd-cycle-domain",
+    CMD_CYCLE_DIFFICULTY = "cmd-cycle-difficulty",
+    CMD_CYCLE_DURATION = "cmd-cycle-duration",
+    CMD_CLEAR_FILTERS = "cmd-clear-filters",
+    CMD_PAGE_UP = "cmd-page-up",
+    CMD_PAGE_DOWN = "cmd-page-down",
+    CMD_TOP = "cmd-top",
+    CMD_BOTTOM = "cmd-bottom",
+    KEY_PAGE_UP = "key-page-up",
+    KEY_PAGE_DOWN = "key-page-down",
+    KEY_HOME = "key-home",
+    KEY_END = "key-end",
+    DOMAIN_LINUX = "domain-linux",
+    DOMAIN_WINDOWS = "domain-windows",
+    DOMAIN_NETWORK = "domain-reseau",
+    DOMAIN_SYSTEMS = "domain-systeme",
+    DOMAIN_SECURITY = "domain-securite",
+    DOMAIN_VIRTUALIZATION = "domain-virtualisation",
+    DOMAIN_TROUBLESHOOTING = "domain-depannage",
+    DOMAIN_AUTOMATION = "domain-automatisation",
+    DIFFICULTY_BEGINNER = "difficulty-debutant",
+    DIFFICULTY_INTERMEDIATE = "difficulty-intermediaire",
+    DIFFICULTY_ADVANCED = "difficulty-avance",
+    LIBRARY_SEARCH = "library-search",
+    LIBRARY_SEARCH_HINT = "library-search-hint",
+    LIBRARY_SEARCH_DONE = "library-search-done",
+    LIBRARY_FILTER_DOMAIN = "library-filter-domain",
+    LIBRARY_FILTER_DIFFICULTY = "library-filter-difficulty",
+    LIBRARY_FILTER_DURATION = "library-filter-duration",
+    LIBRARY_ALL = "library-all",
+    LIBRARY_ANY_DURATION = "library-any-duration",
+    LIBRARY_MAX_MINUTES = "library-max-minutes",
+    LIBRARY_RESULTS = "library-results",
+    LIBRARY_NO_MATCH = "library-no-match",
+    LIBRARY_COL_TITLE = "library-col-title",
+    LIBRARY_COL_DOMAIN = "library-col-domain",
+    LIBRARY_COL_LEVEL = "library-col-level",
+    LIBRARY_COL_DURATION = "library-col-duration",
+    MINUTES = "minutes",
+    PATHS_SUMMARY = "paths-summary",
+    PATHS_EMPTY = "paths-empty",
+    PATHS_PREREQUISITES = "paths-prerequisites",
+    PATHS_NO_PREREQUISITE = "paths-no-prerequisite",
+    READER_OBJECTIVES = "reader-objectives",
+    READER_PREREQUISITES = "reader-prerequisites",
+    READER_SKILLS = "reader-skills",
+    READER_SOURCES = "reader-sources",
+    READER_VERIFIED = "reader-verified",
+    READER_UNVERIFIED = "reader-unverified",
+    READER_META = "reader-meta",
+    READER_CREDITS = "reader-credits",
+    READER_POSITION = "reader-position",
+    READER_MISSING = "reader-missing",
+    HOME_CONTENT = "home-content",
+    HOME_START_HINT = "home-start-hint",
+    DIAG_CONTENT = "diag-content",
+    DIAG_CONTENT_VALUE = "diag-content-value",
 }
 
 /// Traducteur pour une langue.
@@ -258,6 +321,18 @@ mod tests {
     fn arguments_are_interpolated_without_isolation_marks() {
         let i18n = Localizer::new(Language::French);
         let text = i18n.t_args(msg::HOME_GREETING, &[("name", "Alice".into())]);
+        assert_eq!(
+            i18n.t_args(msg::LIBRARY_RESULTS, &[("count", 0.into())]),
+            "Aucun chapitre"
+        );
+        assert_eq!(
+            i18n.t_args(msg::LIBRARY_RESULTS, &[("count", 1.into())]),
+            "1 chapitre"
+        );
+        assert_eq!(
+            i18n.t_args(msg::LIBRARY_RESULTS, &[("count", 3.into())]),
+            "3 chapitres"
+        );
         assert_eq!(text, "Bonjour, Alice");
     }
 

@@ -1,0 +1,20 @@
+{
+  "format_version": 1,
+  "skills": [
+    { "id": "linux-shell", "name": "Utiliser le shell Bash", "domain": "linux" },
+    { "id": "linux-fichiers", "name": "Manipuler les fichiers et l'arborescence", "domain": "linux" },
+    { "id": "linux-droits", "name": "Gérer utilisateurs, groupes et droits", "domain": "linux" }
+  ],
+  "paths": [
+    {
+      "id": "linux-bases",
+      "title": "Linux — les bases",
+      "summary": "Premiers pas dans le terminal, l'arborescence et les droits : le socle indispensable avant toute administration Linux.",
+      "chapters": [
+        "linux-terminal-premiers-pas",
+        "linux-arborescence-fichiers",
+        "linux-utilisateurs-permissions"
+      ]
+    }
+  ]
+}

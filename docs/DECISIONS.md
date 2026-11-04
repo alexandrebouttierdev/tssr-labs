@@ -152,3 +152,23 @@ Ce document rassemble les choix validés pendant le cadrage. En cas de conflit a
 - Aucun compte distant, aucune télémétrie, aucun rapport automatique.
 - Logs locaux avec masquage des secrets.
 - Coffre natif : macOS Keychain, Windows Credential Manager, Linux Secret Service/équivalent. Si indisponible, avertir et ne pas stocker les secrets non protégés.
+
+## Compléments validés au démarrage (2026-11-03)
+
+Décisions prises lors de l'audit initial, en complément des points ci-dessus.
+
+- Dépôt : branche principale `main` ; documents de cadrage versionnés dans le dépôt.
+- Utilisateur dans les labos : côté hôte, conteneur non privilégié (`cap-drop ALL`, `no-new-privileges`, user namespaces/rootless si disponibles). Dans la machine, l'apprenant est un utilisateur non-root disposant de `sudo`, car les exercices TSSR exigent des actions d'administration. Les capabilities supplémentaires (ex. `NET_ADMIN` pour un pare-feu) proviennent d'une liste autorisée, sont déclarées par le scénario et affichées avant le démarrage.
+- Images de labo : construites localement à partir de Dockerfiles embarqués et d'images de base épinglées par digest ; le réseau n'est ouvert que pendant ce build contrôlé par l'application, jamais dans le labo. Publication d'images préconstruites envisagée plus tard.
+- Format des cours : texte en Markdown et métadonnées en JSON (cohérent avec les scénarios).
+- Exercice « rédiger une commande » hors labo : comparaison textuelle normalisée, explicitement présentée comme telle (aucune exécution simulée).
+- Premier labo sans systemd (support inégal selon Docker/Podman) ; systemd traité dans une tranche ultérieure.
+- Taille de texte : non contrôlable par une application terminal ; remplacée par des modes de densité, la taille de police relevant de l'émulateur.
+- Mises à jour : vérification manuelle par défaut, vérification au lancement activable ; aucune communication réseau implicite.
+- Git : utilisation du client `git` du système (détecté comme dépendance facultative), appelé avec des arguments structurés, sans shell.
+- Rust : édition 2024, toolchain épinglée dans `rust-toolchain.toml`.
+- Migrations SQLite : exécuteur interne fondé sur `PRAGMA user_version` (une transaction par migration, copie de sécurité préalable, refus d'un schéma plus récent) plutôt que `rusqlite_migration`, dont la version disponible impose une version plus ancienne de `rusqlite`.
+- Suppression d'un profil : confirmation par saisie exacte du nom et copie de sécurité de la base créée avant la suppression ; si la copie échoue, rien n'est supprimé.
+- Contenu pédagogique embarqué : format v1 (`catalog.json`, `chapters/<id>/chapter.json` + `chapter.md`), lecture stricte, validation complète au chargement et en CI ; caractères de contrôle refusés dans tout texte de contenu.
+- Sources de contenu : `verified_on` n'est renseigné qu'après vérification humaine ; sinon la source est affichée « non vérifiée ».
+- Raccourcis clavier par contexte d'écran : conflits détectés seulement entre commandes pouvant être actives en même temps.

@@ -1,0 +1,49 @@
+[
+  {
+    "id": "ex-terminal-invite-root",
+    "type": "qcm",
+    "title": "Lire l'invite de commande",
+    "prompt": "L'invite affiche `root@srv-web:~#`. Que signifie le caractère `#` final ?",
+    "choices": [
+      "La session est celle d'un utilisateur ordinaire",
+      "La session est celle de l'administrateur root",
+      "La ligne est un commentaire",
+      "Le répertoire courant est la racine /"
+    ],
+    "correct": [1],
+    "hints": ["Comparez avec le caractère affiché pour un utilisateur ordinaire."],
+    "explanation": "`$` indique un utilisateur ordinaire, `#` l'administrateur root : chaque commande a alors tous les droits."
+  },
+  {
+    "id": "ex-terminal-aide",
+    "type": "qcm",
+    "title": "Trouver de l'aide",
+    "prompt": "Quelles commandes affichent de l'aide sur une commande ? (plusieurs réponses possibles)",
+    "choices": ["man ls", "ls --help", "help cd", "cd --manuel"],
+    "correct": [0, 1, 2],
+    "hints": [
+      "Trois propositions sont correctes.",
+      "Les commandes internes de Bash ont leur propre commande d'aide."
+    ],
+    "explanation": "`man` affiche le manuel, `--help` le résumé des options, et `help` l'aide des commandes internes de Bash comme `cd`. L'option `--manuel` n'existe pas."
+  },
+  {
+    "id": "ex-terminal-manuel",
+    "type": "completer",
+    "title": "Ouvrir le manuel",
+    "prompt": "Complétez la commande pour afficher le manuel de `ls`.",
+    "template": "___ ls",
+    "answers": ["man"],
+    "hints": ["Le mot vient de l'anglais « manual »."],
+    "explanation": "`man ls` ouvre la page de manuel de `ls` ; `q` permet de la quitter."
+  },
+  {
+    "id": "ex-terminal-repertoire-precedent",
+    "type": "rediger",
+    "title": "Revenir en arrière",
+    "prompt": "Rédigez la commande qui ramène au répertoire dans lequel vous étiez juste avant.",
+    "answers": ["cd -"],
+    "hints": ["C'est la commande de changement de répertoire.", "Son argument est un seul caractère."],
+    "explanation": "`cd -` revient au répertoire précédent ; `cd` seul ramène au répertoire personnel."
+  }
+]

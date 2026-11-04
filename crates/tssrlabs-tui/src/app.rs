@@ -4,12 +4,19 @@
 //! résultats d'effets). Toute opération d'entrée/sortie est demandée sous
 //! forme d'[`Effect`] récupéré par la boucle via [`App::take_effects`].
 
+mod exercise;
 mod learning;
+
+/// Types de l'état d'exercice, pour le rendu.
+pub mod exercise_types {
+    pub use super::exercise::{AttemptStatus, ExerciseState};
+}
 
 use std::path::PathBuf;
 use std::sync::Arc;
 
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+use tssrlabs_application::exercises::ProgressMap;
 use tssrlabs_application::profiles::{ProfileError, ProfilesSnapshot};
 use tssrlabs_domain::content::Catalog;
 use tssrlabs_domain::host::HostInfo;
@@ -57,6 +64,8 @@ pub enum Screen {
     Diagnostic,
     /// Lecture d'un chapitre (hors du cycle des onglets).
     Reader,
+    /// Exercices d'un chapitre (hors du cycle des onglets).
+    Exercise,
 }
 
 impl Screen {
@@ -84,6 +93,7 @@ impl Screen {
             Self::Profiles => msg::SCREEN_PROFILES,
             Self::Diagnostic => msg::SCREEN_DIAGNOSTIC,
             Self::Reader => msg::SCREEN_READER,
+            Self::Exercise => msg::SCREEN_EXERCISE,
         }
     }
 }
@@ -161,6 +171,8 @@ pub struct App {
     library: learning::LibraryState,
     paths_row: usize,
     reader: Option<learning::ReaderState>,
+    exercise: Option<exercise::ExerciseState>,
+    progress: ProgressMap,
     env: Environment,
     keymap: Keymap,
     i18n: Localizer,
@@ -184,6 +196,8 @@ impl App {
             library: learning::LibraryState::default(),
             paths_row: 0,
             reader: None,
+            exercise: None,
+            progress: ProgressMap::new(),
             env,
             keymap: Keymap::default(),
             i18n: Localizer::new(Language::default()),
@@ -245,6 +259,11 @@ impl App {
         self.diagnostic_row
     }
 
+    /// Progression du profil actif, par exercice.
+    pub fn progress(&self) -> &ProgressMap {
+        &self.progress
+    }
+
     /// Contexte d'exécution.
     pub fn env(&self) -> &Environment {
         &self.env
@@ -276,6 +295,7 @@ impl App {
             Screen::Profiles => Context::Profiles,
             Screen::Library => Context::Library,
             Screen::Reader => Context::Reader,
+            Screen::Exercise => Context::Exercise,
             _ => Context::Global,
         }
     }
@@ -312,6 +332,9 @@ impl App {
             self.on_dialog_key(key);
         } else if self.library.searching && self.screen == Screen::Library && !self.help_open() {
             self.on_search_key(key);
+        } else if self.screen == Screen::Exercise && !self.help_open() && self.on_exercise_key(key)
+        {
+            // Touche consommée par la saisie de la réponse.
         } else if let Some(command) = self.keymap.command_for(key, self.context()) {
             self.on_command(command);
         }
@@ -343,6 +366,9 @@ impl App {
             }
             return;
         }
+        if self.screen == Screen::Exercise && self.on_exercise_command(command) {
+            return;
+        }
         if self.on_learning_command(command) {
             return;
         }
@@ -367,7 +393,15 @@ impl App {
             | Command::PageUp
             | Command::PageDown
             | Command::Top
-            | Command::Bottom => {}
+            | Command::Bottom
+            | Command::Hint
+            | Command::ShowSolution
+            | Command::NextExercise
+            | Command::PrevExercise
+            | Command::ToggleChoice => {}
+            Command::OpenExercises => {
+                self.open_exercises();
+            }
         }
     }
 
@@ -530,6 +564,34 @@ impl App {
                 ));
             }
             AppEvent::PreferencesSaved(Ok(())) => {}
+            AppEvent::ProgressLoaded { profile, result } => {
+                if self.active_profile().map(|p| p.id) != Some(profile) {
+                    return;
+                }
+                match result {
+                    Ok(progress) => self.progress = progress,
+                    Err(error) => {
+                        self.notice =
+                            Some(Notice::Error(self.i18n.t_args(
+                                msg::ERROR_STORAGE,
+                                &[("detail", error.to_string().into())],
+                            )));
+                    }
+                }
+            }
+            AppEvent::AttemptRecorded { profile, result } => match result {
+                Ok((exercise, progress)) => {
+                    if self.active_profile().map(|p| p.id) == Some(profile) {
+                        self.progress.insert(exercise, progress);
+                    }
+                }
+                Err(error) => {
+                    self.notice = Some(Notice::Error(self.i18n.t_args(
+                        msg::EXERCISE_RECORD_ERROR,
+                        &[("detail", error.to_string().into())],
+                    )));
+                }
+            },
         }
     }
 
@@ -606,6 +668,14 @@ impl App {
     fn apply_snapshot(&mut self, snapshot: ProfilesSnapshot) {
         if let Some(active) = &snapshot.active {
             self.theme_kind = active.preferences.theme;
+        }
+        // Changement de profil actif : la progression affichée est la sienne.
+        let new_active = snapshot.active.as_ref().map(|a| a.profile.id);
+        if new_active != self.active_profile().map(|p| p.id) {
+            self.progress.clear();
+            if let Some(id) = new_active {
+                self.effects.push(Effect::LoadProgress(id));
+            }
         }
         // Garde la sélection sur le profil actif après une opération.
         self.profile_row = snapshot
@@ -731,6 +801,32 @@ pub(crate) mod tests {
                     chapters: vec![id("terminal"), id("permissions")],
                 }],
             )
+            .unwrap()
+            .with_exercises(vec![
+                tssrlabs_domain::exercise::Exercise {
+                    id: id("ex-qcm"),
+                    chapter: id("terminal"),
+                    title: "Invite root".into(),
+                    prompt: "Que signifie `#` ?".into(),
+                    kind: tssrlabs_domain::exercise::ExerciseKind::MultipleChoice {
+                        choices: vec!["Utilisateur".into(), "Root".into(), "Commentaire".into()],
+                        correct: vec![1],
+                    },
+                    hints: vec!["Pensez à l'administrateur.".into()],
+                    explanation: "`#` indique root.".into(),
+                },
+                tssrlabs_domain::exercise::Exercise {
+                    id: id("ex-cd"),
+                    chapter: id("terminal"),
+                    title: "Revenir en arrière".into(),
+                    prompt: "Revenez au répertoire précédent.".into(),
+                    kind: tssrlabs_domain::exercise::ExerciseKind::WriteCommand {
+                        answers: vec!["cd -".into()],
+                    },
+                    hints: vec!["cd".into(), "Un tiret.".into()],
+                    explanation: "`cd -` revient en arrière.".into(),
+                },
+            ])
             .unwrap(),
         )
     }
@@ -771,6 +867,7 @@ pub(crate) mod tests {
             op: ProfileOp::Load,
             result: Ok(snapshot(names, active, ThemeChoice::Dark)),
         });
+        app.take_effects();
         app
     }
 
@@ -930,6 +1027,11 @@ pub(crate) mod tests {
             result: Ok(snapshot(&["Alice", "Bob"], Some(1), ThemeChoice::Dark)),
         });
         assert_eq!(app.screen(), Screen::Home);
+        assert_eq!(
+            app.take_effects(),
+            vec![Effect::LoadProgress(ProfileId::new(2))],
+            "changer de profil charge sa progression"
+        );
 
         go_to(&mut app, Screen::Profiles);
         assert_eq!(app.profile_row(), 1, "sélection sur le profil actif");
@@ -1173,5 +1275,183 @@ pub(crate) mod tests {
             Screen::Profiles,
             "Tab quitte la lecture vers l'écran suivant"
         );
+    }
+
+    // --- Exercices ---------------------------------------------------------
+
+    use super::exercise_types::AttemptStatus as AttemptStatusAlias;
+    use tssrlabs_domain::exercise::{ExerciseProgress, Outcome};
+
+    fn open_terminal_exercises(app: &mut App) {
+        go_to(app, Screen::Library);
+        // « Le terminal » est le premier chapitre (niveau débutant).
+        send(app, KeyCode::Enter);
+        send(app, KeyCode::Char('e'));
+        assert_eq!(app.screen(), Screen::Exercise);
+    }
+
+    fn recorded(app: &mut App) -> Vec<(String, Outcome, u8)> {
+        app.take_effects()
+            .into_iter()
+            .filter_map(|e| match e {
+                Effect::RecordAttempt {
+                    exercise,
+                    outcome,
+                    hints_used,
+                    ..
+                } => Some((exercise.to_string(), outcome, hints_used)),
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn loading_an_active_profile_loads_its_progress() {
+        let mut app = App::new(test_env(ColorSupport::TrueColor), test_catalog());
+        app.take_effects();
+        app.handle_app_event(AppEvent::Profiles {
+            op: ProfileOp::Load,
+            result: Ok(snapshot(&["Alice"], Some(0), ThemeChoice::Dark)),
+        });
+        assert_eq!(
+            app.take_effects(),
+            vec![Effect::LoadProgress(ProfileId::new(1))]
+        );
+    }
+
+    #[test]
+    fn multiple_choice_flow_records_attempts() {
+        let mut app = loaded_app(&["Alice"], Some(0));
+        open_terminal_exercises(&mut app);
+        assert_eq!(app.current_exercise().unwrap().0.id.as_str(), "ex-qcm");
+
+        send(&mut app, KeyCode::Enter);
+        assert_eq!(
+            app.exercise_state().unwrap().status,
+            AttemptStatusAlias::Empty
+        );
+        assert!(
+            recorded(&mut app).is_empty(),
+            "réponse vide : rien n'est compté"
+        );
+
+        send(&mut app, KeyCode::Char('1'));
+        send(&mut app, KeyCode::Enter);
+        assert_eq!(
+            recorded(&mut app),
+            vec![("ex-qcm".into(), Outcome::Incorrect, 0)]
+        );
+
+        send(&mut app, KeyCode::F(2));
+        send(&mut app, KeyCode::Char('1'));
+        send(&mut app, KeyCode::Down);
+        send(&mut app, KeyCode::Char(' '));
+        send(&mut app, KeyCode::Enter);
+        assert_eq!(
+            recorded(&mut app),
+            vec![("ex-qcm".into(), Outcome::Correct, 1)]
+        );
+        assert!(app.exercise_state().unwrap().status.is_finished());
+
+        // Terminé : Entrée passe à l'exercice suivant, état réinitialisé.
+        send(&mut app, KeyCode::Enter);
+        let state = app.exercise_state().unwrap();
+        assert_eq!((state.index, state.hints_shown), (1, 0));
+    }
+
+    #[test]
+    fn written_command_treats_letters_as_text() {
+        let mut app = loaded_app(&["Alice"], Some(0));
+        open_terminal_exercises(&mut app);
+        send(&mut app, KeyCode::PageDown);
+        type_text(&mut app, "cd q");
+        assert!(app.is_running(), "« q » est du texte");
+        send(&mut app, KeyCode::Enter);
+        assert_eq!(
+            recorded(&mut app),
+            vec![("ex-cd".into(), Outcome::Incorrect, 0)]
+        );
+        send(&mut app, KeyCode::Backspace);
+        type_text(&mut app, "-");
+        send(&mut app, KeyCode::Enter);
+        assert_eq!(
+            recorded(&mut app),
+            vec![("ex-cd".into(), Outcome::Correct, 0)]
+        );
+        // Après réussite, la saisie est verrouillée.
+        type_text(&mut app, "x");
+        assert_eq!(app.exercise_state().unwrap().input.value(), "cd -");
+    }
+
+    #[test]
+    fn solution_is_recorded_once_and_hints_are_capped() {
+        let mut app = loaded_app(&["Alice"], Some(0));
+        open_terminal_exercises(&mut app);
+        send(&mut app, KeyCode::PageDown);
+        for _ in 0..5 {
+            send(&mut app, KeyCode::F(2));
+        }
+        assert_eq!(app.exercise_state().unwrap().hints_shown, 2);
+        send(&mut app, KeyCode::F(3));
+        send(&mut app, KeyCode::F(3));
+        assert_eq!(
+            recorded(&mut app),
+            vec![("ex-cd".into(), Outcome::Revealed, 2)]
+        );
+    }
+
+    #[test]
+    fn without_active_profile_nothing_is_recorded() {
+        let mut app = loaded_app(&["Alice"], None);
+        send(&mut app, KeyCode::Esc);
+        open_terminal_exercises(&mut app);
+        send(&mut app, KeyCode::Char('2'));
+        send(&mut app, KeyCode::Enter);
+        assert!(app.exercise_state().unwrap().status.is_finished());
+        assert!(recorded(&mut app).is_empty());
+    }
+
+    #[test]
+    fn escape_returns_to_reader_and_tab_leaves_both() {
+        let mut app = loaded_app(&["Alice"], Some(0));
+        open_terminal_exercises(&mut app);
+        send(&mut app, KeyCode::Esc);
+        assert_eq!(app.screen(), Screen::Reader);
+        assert!(app.reader().is_some());
+        send(&mut app, KeyCode::Char('e'));
+        send(&mut app, KeyCode::Tab);
+        assert_eq!(app.screen(), Screen::Profiles);
+        assert!(app.reader().is_none() && app.exercise_state().is_none());
+    }
+
+    #[test]
+    fn progress_events_apply_to_active_profile_only() {
+        let mut app = loaded_app(&["Alice"], Some(0));
+        let solved = ExerciseProgress {
+            attempts: 1,
+            solved: true,
+            revealed: false,
+            fewest_hints: Some(0),
+        };
+        let mut other = tssrlabs_application::exercises::ProgressMap::new();
+        other.insert(
+            tssrlabs_domain::content::ContentId::parse("ex-cd").unwrap(),
+            solved,
+        );
+        app.handle_app_event(AppEvent::ProgressLoaded {
+            profile: ProfileId::new(99),
+            result: Ok(other.clone()),
+        });
+        assert!(app.progress().is_empty());
+        app.handle_app_event(AppEvent::ProgressLoaded {
+            profile: ProfileId::new(1),
+            result: Ok(other),
+        });
+        assert_eq!(app.progress().len(), 1);
+        app.handle_app_event(AppEvent::AttemptRecorded {
+            profile: ProfileId::new(1),
+            result: Err(RepositoryError::NotFound),
+        });
+        assert!(matches!(app.notice(), Some(Notice::Error(t)) if t.contains("non enregistrée")));
     }
 }

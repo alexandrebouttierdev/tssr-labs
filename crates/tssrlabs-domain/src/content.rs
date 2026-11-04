@@ -8,6 +8,8 @@
 use std::collections::{HashMap, HashSet};
 
 use jiff::civil::Date;
+
+use crate::exercise::Exercise;
 use unicode_normalization::UnicodeNormalization;
 use unicode_normalization::char::is_combining_mark;
 
@@ -270,6 +272,22 @@ pub enum ContentIssue {
     /// Durée nulle.
     #[error("{0} : durée estimée nulle")]
     ZeroDuration(String),
+    /// Exercice rattaché à un chapitre inconnu.
+    #[error("exercice {exercise} : chapitre inconnu « {chapter} »")]
+    UnknownExerciseChapter {
+        /// Exercice.
+        exercise: String,
+        /// Chapitre cité.
+        chapter: String,
+    },
+    /// Exercice incohérent avec son type.
+    #[error("exercice {exercise} : {reason}")]
+    InvalidExercise {
+        /// Exercice.
+        exercise: String,
+        /// Raison.
+        reason: &'static str,
+    },
     /// Source sans date de vérification.
     #[error("{chapter} : source non vérifiée « {source_title} »")]
     UnverifiedSource {
@@ -296,6 +314,7 @@ pub struct Catalog {
     skills: Vec<Skill>,
     chapters: Vec<Chapter>,
     paths: Vec<LearningPath>,
+    exercises: Vec<Exercise>,
     warnings: Vec<ContentIssue>,
 }
 
@@ -471,8 +490,40 @@ impl Catalog {
             skills,
             chapters,
             paths,
+            exercises: Vec::new(),
             warnings,
         })
+    }
+
+    /// Ajoute des exercices après validation (voir [`crate::exercise::validate`]).
+    pub fn with_exercises(mut self, exercises: Vec<Exercise>) -> Result<Self, Vec<ContentIssue>> {
+        let chapter_ids: HashSet<&ContentId> = self.chapters.iter().map(|c| &c.id).collect();
+        let other_ids: HashSet<&ContentId> = self
+            .skills
+            .iter()
+            .map(|s| &s.id)
+            .chain(self.chapters.iter().map(|c| &c.id))
+            .chain(self.paths.iter().map(|p| &p.id))
+            .collect();
+        let issues = crate::exercise::validate(&exercises, &chapter_ids, &other_ids);
+        if !issues.is_empty() {
+            return Err(issues);
+        }
+        self.exercises = exercises;
+        Ok(self)
+    }
+
+    /// Exercices d'un chapitre, dans l'ordre de déclaration.
+    pub fn exercises_for(&self, chapter: &ContentId) -> Vec<&Exercise> {
+        self.exercises
+            .iter()
+            .filter(|e| &e.chapter == chapter)
+            .collect()
+    }
+
+    /// Tous les exercices.
+    pub fn exercises(&self) -> &[Exercise] {
+        &self.exercises
     }
 
     /// Compétences.

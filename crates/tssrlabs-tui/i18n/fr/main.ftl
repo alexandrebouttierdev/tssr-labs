@@ -15,9 +15,10 @@ screen-diagnostic = Diagnostic
 ## Accueil
 
 home-version = Version { $version }
-home-upcoming = Les exercices guidés arrivent dans la prochaine version.
+home-upcoming = La progression (XP, niveaux, compétences) arrive dans la prochaine version.
 home-greeting = Bonjour, { $name }
 home-no-activity = Aucune activité enregistrée pour ce profil.
+home-exercises = Exercices réussis : { $solved } sur { $total }.
 home-no-profile = Aucun profil actif.
 home-no-profile-hint = Ouvrez l'écran Profils pour créer ou choisir un profil.
 loading-profiles = Chargement des profils…
@@ -216,3 +217,52 @@ diag-content-value = { $paths } parcours, { $chapters } chapitres (format { $for
     [one] 1 avertissement
    *[other] { $warnings } avertissements
 }
+
+## Exercices guidés
+
+screen-exercise = Exercice
+cmd-open-exercises = Exercices
+cmd-hint = Indice
+cmd-show-solution = Solution
+cmd-next-exercise = Exercice suivant
+cmd-prev-exercise = Exercice précédent
+cmd-toggle-choice = Cocher
+cmd-validate = Valider
+exercise-header = Exercice { $index }/{ $total } — { $kind }
+exercise-kind-qcm = Question à choix multiples
+exercise-kind-complete = Commande à compléter
+exercise-kind-analyze = Analyse de sortie
+exercise-kind-write = Commande à rédiger
+exercise-multiple = Plusieurs réponses possibles.
+exercise-single = Une seule réponse.
+exercise-choice-hint = { $toggle } ou chiffre : cocher · { $validate } : valider
+exercise-answer = Réponse :
+exercise-text-check = Vérification par comparaison de texte : la commande n'est pas exécutée. Les laboratoires permettront de l'essayer réellement.
+exercise-hint = Indice { $index } : { $text }
+exercise-no-more-hint = Aucun autre indice.
+exercise-correct = ✓ Bonne réponse.
+exercise-incorrect = ✗ Réponse incorrecte. Réessayez ou demandez un indice.
+exercise-empty = Saisissez ou cochez une réponse avant de valider.
+exercise-revealed = Solution : { $solution }
+exercise-explanation = Explication : { $text }
+exercise-next-hint = { $key } : exercice suivant
+exercise-progress = { $attempts ->
+    [0] Aucune tentative enregistrée
+    [one] 1 tentative enregistrée
+   *[other] { $attempts } tentatives enregistrées
+}{ $solved ->
+    [yes] {" · réussi"}
+   *[no] {""}
+}
+exercise-not-recorded = Aucun profil actif : les tentatives ne sont pas enregistrées.
+exercise-record-error = tentative non enregistrée : { $detail }
+exercise-none = Ce chapitre n'a pas encore d'exercice.
+reader-exercises = { $count ->
+    [one] 1 exercice
+   *[other] { $count } exercices
+} · { $solved } réussi(s) · { $key } pour commencer
+paths-exercises = { $count ->
+    [0] Aucun exercice
+    [one] 1 exercice
+   *[other] { $count } exercices
+}, { $solved } réussi(s).

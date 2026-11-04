@@ -111,10 +111,25 @@ pub fn render(app: &App, theme: &Theme, mode: LayoutMode, frame: &mut Frame, are
             &[("list", prerequisites.join(", ").into())],
         )
     };
+    let exercises = catalog.exercises_for(&chapter.id);
+    let solved = exercises
+        .iter()
+        .filter(|e| app.progress().get(&e.id).is_some_and(|p| p.solved))
+        .count();
     let details = vec![
         Line::styled("─".repeat(usize::from(details_area.width)), theme.border),
         Line::styled(chapter.summary.clone(), theme.base),
-        Line::styled(prerequisites, theme.muted),
+        Line::styled(
+            format!(
+                "{}  {}",
+                prerequisites,
+                i18n.t_args(
+                    msg::PATHS_EXERCISES,
+                    &[("count", exercises.len().into()), ("solved", solved.into())],
+                )
+            ),
+            theme.muted,
+        ),
     ];
     frame.render_widget(
         Paragraph::new(details).wrap(Wrap { trim: true }),

@@ -1,6 +1,7 @@
 //! Écrans de l'application.
 
 pub mod diagnostic;
+pub mod exercise;
 pub mod home;
 pub mod library;
 pub mod paths;

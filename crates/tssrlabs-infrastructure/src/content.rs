@@ -23,6 +23,7 @@ use serde::Deserialize;
 use tssrlabs_domain::content::{
     Catalog, Chapter, ContentId, ContentIssue, Difficulty, Domain, LearningPath, Skill, Source,
 };
+use tssrlabs_domain::exercise::{Exercise, ExerciseKind};
 
 /// Version du format de contenu prise en charge.
 pub const FORMAT_VERSION: u32 = 1;
@@ -118,6 +119,28 @@ struct ChapterFile {
     sources: Vec<SourceFile>,
     authors: Vec<String>,
     license: String,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ExerciseFile {
+    id: String,
+    #[serde(rename = "type")]
+    kind: String,
+    title: String,
+    prompt: String,
+    #[serde(default)]
+    choices: Option<Vec<String>>,
+    #[serde(default)]
+    correct: Option<Vec<usize>>,
+    #[serde(default)]
+    template: Option<String>,
+    #[serde(default)]
+    output: Option<String>,
+    #[serde(default)]
+    answers: Option<Vec<String>>,
+    hints: Vec<String>,
+    explanation: String,
 }
 
 #[derive(Deserialize)]
@@ -285,7 +308,95 @@ pub fn parse(files: &ContentFiles) -> Result<Catalog, ContentError> {
         });
     }
 
-    Catalog::new(skills, chapters, paths).map_err(ContentError::Invalid)
+    let exercises = parse_exercises(files, &chapters)?;
+    Catalog::new(skills, chapters, paths)
+        .and_then(|catalog| catalog.with_exercises(exercises))
+        .map_err(ContentError::Invalid)
+}
+
+/// Lit les fichiers `exercises.json` (facultatifs) des chapitres.
+fn parse_exercises(
+    files: &ContentFiles,
+    chapters: &[Chapter],
+) -> Result<Vec<Exercise>, ContentError> {
+    let mut exercises = Vec::new();
+    for chapter in chapters {
+        let path = format!("chapters/{}/exercises.json", chapter.id);
+        if !files.contains_key(&path) {
+            continue;
+        }
+        let entries: Vec<ExerciseFile> = json(files, &path)?;
+        for entry in entries {
+            exercises.push(exercise(&path, &chapter.id, entry)?);
+        }
+    }
+    Ok(exercises)
+}
+
+fn exercise(
+    file: &str,
+    chapter: &ContentId,
+    entry: ExerciseFile,
+) -> Result<Exercise, ContentError> {
+    let invalid = |field: &'static str, value: &str| ContentError::InvalidValue {
+        file: file.to_owned(),
+        field,
+        value: value.to_owned(),
+    };
+    // Chaque type n'accepte que ses propres champs.
+    let present = [
+        ("choices", entry.choices.is_some()),
+        ("correct", entry.correct.is_some()),
+        ("template", entry.template.is_some()),
+        ("output", entry.output.is_some()),
+        ("answers", entry.answers.is_some()),
+    ];
+    let expected: &[&str] = match entry.kind.as_str() {
+        "qcm" => &["choices", "correct"],
+        "completer" => &["template", "answers"],
+        "analyser" => &["output", "answers"],
+        "rediger" => &["answers"],
+        other => return Err(invalid("type", other)),
+    };
+    for (field, is_present) in present {
+        if is_present != expected.contains(&field) {
+            let state = if is_present {
+                "champ inattendu pour ce type"
+            } else {
+                "champ manquant"
+            };
+            return Err(invalid(
+                field,
+                &format!("{state} ({} {})", entry.kind, entry.id),
+            ));
+        }
+    }
+    let kind = match entry.kind.as_str() {
+        "qcm" => ExerciseKind::MultipleChoice {
+            choices: entry.choices.unwrap_or_default(),
+            correct: entry.correct.unwrap_or_default(),
+        },
+        "completer" => ExerciseKind::CompleteCommand {
+            template: entry.template.unwrap_or_default(),
+            answers: entry.answers.unwrap_or_default(),
+        },
+        "analyser" => ExerciseKind::AnalyzeOutput {
+            output: entry.output.unwrap_or_default(),
+            answers: entry.answers.unwrap_or_default(),
+        },
+        _ => ExerciseKind::WriteCommand {
+            answers: entry.answers.unwrap_or_default(),
+        },
+    };
+    Ok(Exercise {
+        id: content_id(file, "id", &entry.id)?,
+        chapter: chapter.clone(),
+        title: entry.title,
+        prompt: entry.prompt,
+        kind,
+        hints: entry.hints,
+        explanation: entry.explanation,
+    })
 }
 
 #[cfg(test)]
@@ -303,6 +414,11 @@ mod tests {
             assert_eq!(warning.severity(), Severity::Warning, "{warning}");
         }
         for chapter in catalog.chapters() {
+            assert!(
+                !catalog.exercises_for(&chapter.id).is_empty(),
+                "{} : au moins un exercice",
+                chapter.id
+            );
             assert!(
                 chapter.body.starts_with("# "),
                 "{} : titre Markdown attendu",
@@ -396,5 +512,57 @@ mod tests {
         let catalog = files["catalog.json"].replace("[\"c\"]", "[\"c\",\"fantome\"]");
         files.insert("catalog.json".into(), catalog);
         assert!(matches!(parse(&files), Err(ContentError::Invalid(issues)) if issues.len() == 1));
+    }
+
+    #[test]
+    fn exercises_are_parsed_and_validated() {
+        let mut files = minimal();
+        files.insert(
+            "chapters/c/exercises.json".into(),
+            r#"[{"id":"ex-1","type":"qcm","title":"T","prompt":"P","choices":["a","b"],
+                 "correct":[1],"hints":[],"explanation":"E"},
+                {"id":"ex-2","type":"rediger","title":"T","prompt":"P","answers":["ls -l"],
+                 "hints":["H"],"explanation":"E"}]"#
+                .into(),
+        );
+        let catalog = parse(&files).unwrap();
+        let id = ContentId::parse("c").unwrap();
+        assert_eq!(catalog.exercises_for(&id).len(), 2);
+    }
+
+    #[test]
+    fn exercise_fields_must_match_their_type() {
+        let mut files = minimal();
+        files.insert(
+            "chapters/c/exercises.json".into(),
+            r#"[{"id":"ex-1","type":"rediger","title":"T","prompt":"P","answers":["ls"],
+                 "template":"___ ls","hints":[],"explanation":"E"}]"#
+                .into(),
+        );
+        assert!(matches!(
+            parse(&files),
+            Err(ContentError::InvalidValue {
+                field: "template",
+                ..
+            })
+        ));
+
+        files.insert(
+            "chapters/c/exercises.json".into(),
+            r#"[{"id":"ex-1","type":"executer","title":"T","prompt":"P","hints":[],"explanation":"E"}]"#
+                .into(),
+        );
+        assert!(matches!(
+            parse(&files),
+            Err(ContentError::InvalidValue { field: "type", .. })
+        ));
+
+        files.insert(
+            "chapters/c/exercises.json".into(),
+            r#"[{"id":"ex-1","type":"qcm","title":"T","prompt":"P","choices":["a","b"],
+                 "correct":[5],"hints":[],"explanation":"E"}]"#
+                .into(),
+        );
+        assert!(matches!(parse(&files), Err(ContentError::Invalid(_))));
     }
 }

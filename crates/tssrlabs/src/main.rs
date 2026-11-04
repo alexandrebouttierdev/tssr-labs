@@ -13,11 +13,13 @@ use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
 use tssrlabs_application::Services;
+use tssrlabs_application::exercises::ExerciseService;
 use tssrlabs_application::profiles::ProfileService;
 use tssrlabs_infrastructure::content::{self, ContentError};
 use tssrlabs_infrastructure::host;
 use tssrlabs_infrastructure::logging::{self, LoggingError};
 use tssrlabs_infrastructure::paths::{AppPaths, PathsError};
+use tssrlabs_infrastructure::sqlite::attempts::SqliteAttemptRepository;
 use tssrlabs_infrastructure::sqlite::profiles::{SqliteProfileRepository, SqliteSafetyBackup};
 use tssrlabs_infrastructure::sqlite::{self, DbError};
 use tssrlabs_tui::TuiError;
@@ -138,8 +140,9 @@ fn run() -> Result<(), AppError> {
     let services = Services {
         profiles: ProfileService::new(
             Arc::new(SqliteProfileRepository::new(db.clone())),
-            Arc::new(SqliteSafetyBackup::new(db)),
+            Arc::new(SqliteSafetyBackup::new(db.clone())),
         ),
+        exercises: ExerciseService::new(Arc::new(SqliteAttemptRepository::new(db))),
     };
 
     let runtime = tokio::runtime::Builder::new_multi_thread()

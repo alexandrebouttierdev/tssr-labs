@@ -39,7 +39,7 @@ Ce dépôt contient le cadrage initial, les décisions produit et techniques, un
 
 ## Développement
 
-État actuel : **tranche 3 (contenu pédagogique hors ligne)** — profils et préférences, parcours guidés, bibliothèque avec recherche et filtres, lecteur de chapitres. Premier parcours : « Linux — les bases ».
+État actuel : **tranche 4 (exercices guidés)** — profils et préférences, parcours guidés, bibliothèque, lecteur de chapitres et 12 exercices (QCM, commandes à compléter ou à rédiger, analyse de sortie) avec indices, solutions et suivi des tentatives par profil.
 
 Prérequis : [rustup](https://rustup.rs). La toolchain est épinglée dans `rust-toolchain.toml` et installée automatiquement.
 
@@ -59,7 +59,7 @@ Variables d'environnement :
 - `TSSRLABS_COLORS` : impose le niveau de couleurs (`none`, `16`, `256`, `truecolor`) si la détection automatique se trompe.
 - `NO_COLOR` : désactive les couleurs ([no-color.org](https://no-color.org)).
 
-Raccourcis : `Tab`/`Maj+Tab` changer d'écran, `t` thème, `F1` ou `?` aide, `q` quitter ; sur l'écran Profils : `Entrée` activer, `n` créer, `r` renommer, `s` ou `Suppr` supprimer ; dans la Bibliothèque : `/` rechercher, `d` domaine, `f` niveau, `m` durée, `x` effacer, `Entrée` ouvrir ; dans un chapitre : flèches, `PgSuiv`/`Espace`, `Début`/`Fin`, `Échap` retour. `F1` affiche les raccourcis de l'écran courant. L'affichage complet demande 100×30 ; le mode compact s'active jusqu'à 60×16.
+Raccourcis : `Tab`/`Maj+Tab` changer d'écran, `t` thème, `F1` ou `?` aide, `q` quitter ; sur l'écran Profils : `Entrée` activer, `n` créer, `r` renommer, `s` ou `Suppr` supprimer ; dans la Bibliothèque : `/` rechercher, `d` domaine, `f` niveau, `m` durée, `x` effacer, `Entrée` ouvrir ; dans un chapitre : flèches, `PgSuiv`/`Espace`, `Début`/`Fin`, `e` exercices, `Échap` retour ; dans un exercice : `Entrée` valider, `F2` indice, `F3` solution, `PgSuiv`/`PgPréc` exercice suivant/précédent. `F1` affiche les raccourcis de l'écran courant. L'affichage complet demande 100×30 ; le mode compact s'active jusqu'à 60×16.
 
 Les journaux sont uniquement locaux ; les secrets reconnaissables y sont masqués. Aucune donnée n'est envoyée sur le réseau.
 

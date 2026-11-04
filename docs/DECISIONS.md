@@ -172,3 +172,4 @@ Décisions prises lors de l'audit initial, en complément des points ci-dessus.
 - Contenu pédagogique embarqué : format v1 (`catalog.json`, `chapters/<id>/chapter.json` + `chapter.md`), lecture stricte, validation complète au chargement et en CI ; caractères de contrôle refusés dans tout texte de contenu.
 - Sources de contenu : `verified_on` n'est renseigné qu'après vérification humaine ; sinon la source est affichée « non vérifiée ».
 - Raccourcis clavier par contexte d'écran : conflits détectés seulement entre commandes pouvant être actives en même temps.
+- Exercices guidés : seule l'issue des tentatives est enregistrée (réussite, échec, solution affichée, nombre d'indices), jamais la réponse saisie. Les réponses textuelles sont vérifiées par comparaison de texte, ce qui est annoncé à l'apprenant ; sans profil actif, rien n'est enregistré.

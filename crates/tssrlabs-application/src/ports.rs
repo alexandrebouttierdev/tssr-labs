@@ -7,6 +7,8 @@
 use std::path::PathBuf;
 
 use futures_util::future::BoxFuture;
+use tssrlabs_domain::content::ContentId;
+use tssrlabs_domain::exercise::Outcome;
 use tssrlabs_domain::preferences::Preferences;
 use tssrlabs_domain::profile::{Profile, ProfileId, ProfileName};
 
@@ -60,4 +62,22 @@ pub trait SafetyBackup: Send + Sync + std::fmt::Debug {
     /// Crée une copie cohérente des données et renvoie son emplacement.
     /// `reason` est une étiquette courte intégrée au nom du fichier.
     fn backup(&self, reason: &str) -> BoxFuture<'_, RepoResult<PathBuf>>;
+}
+
+/// Persistance des tentatives d'exercices.
+pub trait AttemptRepository: Send + Sync + std::fmt::Debug {
+    /// Enregistre une tentative ([`RepositoryError::NotFound`] si le profil
+    /// n'existe plus).
+    fn record(
+        &self,
+        profile: ProfileId,
+        exercise: ContentId,
+        outcome: Outcome,
+        hints_used: u8,
+    ) -> BoxFuture<'_, RepoResult<()>>;
+    /// Progression d'un profil, par exercice.
+    fn progress(
+        &self,
+        profile: ProfileId,
+    ) -> BoxFuture<'_, RepoResult<crate::exercises::ProgressMap>>;
 }

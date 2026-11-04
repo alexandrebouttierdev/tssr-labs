@@ -25,6 +25,8 @@ pub enum Context {
     Library,
     /// Lecture d'un chapitre.
     Reader,
+    /// Exercice guidé.
+    Exercise,
 }
 
 /// Commandes déclenchables au clavier.
@@ -72,11 +74,23 @@ pub enum Command {
     Top,
     /// Fin.
     Bottom,
+    /// Ouvrir les exercices du chapitre.
+    OpenExercises,
+    /// Afficher l'indice suivant.
+    Hint,
+    /// Afficher la solution.
+    ShowSolution,
+    /// Exercice suivant.
+    NextExercise,
+    /// Exercice précédent.
+    PrevExercise,
+    /// Cocher ou décocher la proposition sélectionnée.
+    ToggleChoice,
 }
 
 impl Command {
     /// Ordre d'affichage dans l'aide.
-    pub const ALL: [Self; 21] = [
+    pub const ALL: [Self; 27] = [
         Self::NextScreen,
         Self::PrevScreen,
         Self::Up,
@@ -98,6 +112,12 @@ impl Command {
         Self::PageDown,
         Self::Top,
         Self::Bottom,
+        Self::OpenExercises,
+        Self::ToggleChoice,
+        Self::Hint,
+        Self::ShowSolution,
+        Self::NextExercise,
+        Self::PrevExercise,
     ];
 
     /// Contexte de la commande.
@@ -109,7 +129,14 @@ impl Command {
             | Self::CycleDifficulty
             | Self::CycleDuration
             | Self::ClearFilters => Context::Library,
-            Self::PageUp | Self::PageDown | Self::Top | Self::Bottom => Context::Reader,
+            Self::PageUp | Self::PageDown | Self::Top | Self::Bottom | Self::OpenExercises => {
+                Context::Reader
+            }
+            Self::Hint
+            | Self::ShowSolution
+            | Self::NextExercise
+            | Self::PrevExercise
+            | Self::ToggleChoice => Context::Exercise,
             _ => Context::Global,
         }
     }
@@ -138,6 +165,12 @@ impl Command {
             Self::PageDown => msg::CMD_PAGE_DOWN,
             Self::Top => msg::CMD_TOP,
             Self::Bottom => msg::CMD_BOTTOM,
+            Self::OpenExercises => msg::CMD_OPEN_EXERCISES,
+            Self::Hint => msg::CMD_HINT,
+            Self::ShowSolution => msg::CMD_SHOW_SOLUTION,
+            Self::NextExercise => msg::CMD_NEXT_EXERCISE,
+            Self::PrevExercise => msg::CMD_PREV_EXERCISE,
+            Self::ToggleChoice => msg::CMD_TOGGLE_CHOICE,
         }
     }
 }
@@ -267,6 +300,12 @@ impl Default for Keymap {
                 (plain(Char(' ')), Command::PageDown),
                 (plain(Home), Command::Top),
                 (plain(End), Command::Bottom),
+                (plain(Char('e')), Command::OpenExercises),
+                (plain(Char(' ')), Command::ToggleChoice),
+                (plain(F(2)), Command::Hint),
+                (plain(F(3)), Command::ShowSolution),
+                (plain(PageDown), Command::NextExercise),
+                (plain(PageUp), Command::PrevExercise),
             ],
         }
     }
